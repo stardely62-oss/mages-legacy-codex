@@ -360,6 +360,7 @@ public class RaceGameTests {
 		ServerPlayer player = mycelid(ctx, start);
 		// Yaw 0 looks south (+Z), a little down so the spore lands on the floor
 		player.moveTo(start.getX() + 0.5, start.getY(), start.getZ() + 0.5, 0, 25);
+                player.setYHeadRot(0); // 1.21 view direction follows head rotation, independently of body yaw.
 		RaceData data = RaceState.of(player);
 		data.addResource(40);
 		Vec3 from = player.position();
@@ -374,6 +375,7 @@ public class RaceGameTests {
 			// Looking almost level: the spore flies the full reach and the Mycelid settles on the floor there
 			net.minecraft.world.phys.Vec3 second = player.position();
 			player.moveTo(second.x, second.y, second.z, 0, 3);
+                player.setYHeadRot(0); // 1.21 view direction follows head rotation, independently of body yaw.
 			data.readyAt.clear();
 			data.chainLeft = 0;
 			check(Mycelid.sporeJump(player, data) == AbilityResult.OK, "the level jump should start");
@@ -385,13 +387,13 @@ public class RaceGameTests {
 				data.addResource(100);
 				net.minecraft.world.phys.Vec3 third = player.position();
 				player.moveTo(third.x, third.y, third.z, 180, -15);
+                player.setYHeadRot(180); // 1.21 view direction follows head rotation, independently of body yaw.
 				data.readyAt.clear();
 				data.chainLeft = 0;
 				Vec3 desired = player.getEyePosition().add(player.getViewVector(1).scale(Mycelid.jumpRange(data)));
                 Vec3 chosen = Mycelid.landing(player, Mycelid.jumpRange(data));
                 String diagnostic = " from=" + third + " desired=" + desired + " chosen=" + chosen + " look=" + player.getViewVector(1)
                     + " floor=" + world.getBlockState(BlockPos.containing(desired.x, third.y - 0.5, desired.z));
-                System.out.println("[jump-test]" + diagnostic);
                 AbilityResult up = Mycelid.sporeJump(player, data);
 				ctx.runAfterDelay(Mycelid.JUMP_DELAY + 3, () -> {
 					double upward = player.position().subtract(third).horizontalDistance();

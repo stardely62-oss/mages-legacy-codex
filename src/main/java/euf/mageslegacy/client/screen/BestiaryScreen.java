@@ -30,6 +30,10 @@ import net.minecraft.util.Mth;
  * bonded with its own way in the tooltip.
  */
 public class BestiaryScreen extends Screen {
+    /** Screen.render now draws a blurred background; the custom backdrop is already rendered below. */
+    @Override
+    public void renderBackground(net.minecraft.client.gui.GuiGraphics graphics, int mouseX, int mouseY, float delta) {}
+
 	private static final int CARD_H = 22;
 	private static final int SQUAD_H = 40;
 	private static final int SPIRIT = 0xFF9FE8E0;

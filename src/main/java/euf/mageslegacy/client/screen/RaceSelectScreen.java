@@ -19,6 +19,10 @@ import net.minecraft.util.FormattedCharSequence;
  * scroll with the wheel when a large GUI scale leaves them too little room.
  */
 public class RaceSelectScreen extends Screen {
+    /** Screen.render now draws a blurred background; the custom backdrop is already rendered below. */
+    @Override
+    public void renderBackground(net.minecraft.client.gui.GuiGraphics graphics, int mouseX, int mouseY, float delta) {}
+
 	private static final int CARD_Y = 24;
 	private static final int CARD_H = 52;
 	private static final int TILE_H = 38;

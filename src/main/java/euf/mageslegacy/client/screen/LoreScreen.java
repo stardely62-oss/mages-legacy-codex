@@ -17,6 +17,10 @@ import net.minecraft.util.FormattedCharSequence;
  * what the mage gave that people. A click finishes the writing, the next click turns the page.
  */
 public class LoreScreen extends Screen {
+    /** Screen.render now draws a blurred background; the custom backdrop is already rendered below. */
+    @Override
+    public void renderBackground(net.minecraft.client.gui.GuiGraphics graphics, int mouseX, int mouseY, float delta) {}
+
 	/** Pictures per page; a page whose picture isn't there yet shows the mage's. */
 	private static final String[] PICTURES = {"lore_people", "lore_mage", null, "lore_sleep", "lore_wake"};
 	private static final ResourceLocation FALLBACK = LegacyUi.gui("lore_mage");

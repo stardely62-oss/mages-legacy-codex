@@ -27,6 +27,10 @@ import net.minecraft.world.item.Items;
  * learned ones are framed in gold and their links glow.
  */
 public class TalentScreen extends Screen {
+    /** Screen.render now draws a blurred background; the custom backdrop is already rendered below. */
+    @Override
+    public void renderBackground(net.minecraft.client.gui.GuiGraphics graphics, int mouseX, int mouseY, float delta) {}
+
 	private static final int NODE = 24;
 	private static final int TOP = 80;
 	/** Whether the guide was opened this session; until then its button glows. */

@@ -27,6 +27,10 @@ import net.minecraft.world.item.SpawnEggItem;
  * Mercenary's sync; every button asks the server, which checks again.
  */
 public class MercShopScreen extends Screen {
+    /** Screen.render now draws a blurred background; the custom backdrop is already rendered below. */
+    @Override
+    public void renderBackground(net.minecraft.client.gui.GuiGraphics graphics, int mouseX, int mouseY, float delta) {}
+
 	private static final String[] ROMAN = {"I", "II", "III", "IV"};
 	private static final int CARD_H = 32;
 	private static final int WARE_H = 18;
