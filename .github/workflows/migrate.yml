@@ -1,5 +1,8 @@
 name: Migrate source mappings
 on:
+  push:
+    branches: ['port/neoforge-1.21.1']
+    paths: ['.github/workflows/migrate.yml']
   workflow_dispatch:
 permissions:
   contents: read
