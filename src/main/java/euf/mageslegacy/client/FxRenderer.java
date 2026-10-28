@@ -9,7 +9,7 @@ import euf.mageslegacy.voidborn.Voidborn;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
-import net.fabricmc.fabric.api.client.rendering.v1.WorldRenderContext;
+
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.multiplayer.ClientLevel;
@@ -269,7 +269,7 @@ public final class FxRenderer {
 		return ClientRaceState.clientTicks() <= flightUntil;
 	}
 
-	public static void render(WorldRenderContext context) {
+	public static void render(RenderContext context) {
 		if (EFFECTS.isEmpty()) {
 			return;
 		}

@@ -5,7 +5,7 @@ import euf.mageslegacy.race.RaceData;
 import euf.mageslegacy.race.RaceState;
 import euf.mageslegacy.race.Talents;
 import java.util.List;
-import net.fabricmc.fabric.api.dimension.v1.FabricDimensions;
+
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceKey;
@@ -16,7 +16,7 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
-import net.minecraft.world.level.portal.PortalInfo;
+import net.minecraft.world.level.portal.DimensionTransition;
 import net.minecraft.world.phys.Vec3;
 
 /**
@@ -207,7 +207,7 @@ public final class Pocket {
 			entity.setDeltaMovement(Vec3.ZERO);
 			return entity;
 		}
-		Entity moved = FabricDimensions.teleport(entity, to, new PortalInfo(pos, Vec3.ZERO, yaw, entity.getXRot()));
+		Entity moved = entity.changeDimension(new DimensionTransition(to, pos, Vec3.ZERO, yaw, entity.getXRot(), DimensionTransition.DO_NOTHING));
 		return moved == null ? entity : moved;
 	}
 

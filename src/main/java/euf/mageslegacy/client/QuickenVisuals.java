@@ -3,7 +3,7 @@ package euf.mageslegacy.client;
 import com.mojang.blaze3d.vertex.PoseStack;
 import java.util.HashMap;
 import java.util.Map;
-import net.fabricmc.fabric.api.client.rendering.v1.WorldRenderContext;
+
 import net.minecraft.client.Camera;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
@@ -41,7 +41,7 @@ public final class QuickenVisuals {
 		UNTIL.clear();
 	}
 
-	public static void render(WorldRenderContext context) {
+	public static void render(RenderContext context) {
 		if (UNTIL.isEmpty() || context.consumers() == null) {
 			return;
 		}

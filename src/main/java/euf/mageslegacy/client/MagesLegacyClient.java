@@ -13,14 +13,7 @@ import euf.mageslegacy.race.Race;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
-import net.fabricmc.api.ClientModInitializer;
-import net.fabricmc.fabric.api.blockrenderlayer.v1.BlockRenderLayerMap;
-import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
-import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
-import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 import euf.mageslegacy.platform.Network.Client;
-import net.fabricmc.fabric.api.client.rendering.v1.HudRenderCallback;
-import net.fabricmc.fabric.api.client.rendering.v1.WorldRenderEvents;
 import euf.mageslegacy.platform.Network;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
@@ -28,7 +21,17 @@ import net.minecraft.client.renderer.RenderType;
 import net.minecraft.network.FriendlyByteBuf;
 import org.lwjgl.glfw.GLFW;
 
-public class MagesLegacyClient implements ClientModInitializer {
+@net.neoforged.fml.common.EventBusSubscriber(modid = MagesLegacy.MOD_ID, value = net.neoforged.api.distmarker.Dist.CLIENT)
+public class MagesLegacyClient {
+    @net.neoforged.bus.api.SubscribeEvent
+    public static void setup(net.neoforged.fml.event.lifecycle.FMLClientSetupEvent event) {
+        event.enqueueWork(() -> new MagesLegacyClient().onInitializeClient());
+    }
+    @net.neoforged.bus.api.SubscribeEvent
+    public static void keys(net.neoforged.neoforge.client.event.RegisterKeyMappingsEvent event) { ourKeys().forEach(event::register); }
+    @net.neoforged.bus.api.SubscribeEvent
+    public static void particles(net.neoforged.neoforge.client.event.RegisterParticleProvidersEvent event) { RaceParticles.register(event); }
+
 	public static final String CATEGORY = "category.mages_legacy";
 	public static final KeyMapping[] ABILITY_KEYS = {
 			key("ability_1", GLFW.GLFW_KEY_R), key("ability_2", GLFW.GLFW_KEY_V), key("ability_3", GLFW.GLFW_KEY_Z), key("ability_4", GLFW.GLFW_KEY_H),
@@ -60,54 +63,35 @@ public class MagesLegacyClient implements ClientModInitializer {
 	}
 
 	private static KeyMapping key(String name, int code) {
-		return KeyBindingHelper.registerKeyBinding(new KeyMapping("key.mages_legacy." + name, InputConstants.Type.KEYSYM, code, CATEGORY));
+		return new KeyMapping("key.mages_legacy." + name, InputConstants.Type.KEYSYM, code, CATEGORY);
 	}
 
-	@Override
 	public void onInitializeClient() {
-		BlockRenderLayerMap.INSTANCE.putBlock(MagesLegacy.MYCELIUM_NODE.get(), RenderType.cutout());
-		RaceParticles.register();
-		Client.registerGlobalReceiver(RacePackets.SYNC, (client, handler, buf, sender) -> {
-			FriendlyByteBuf copy = new FriendlyByteBuf(buf.copy());
-			client.execute(() -> {
-				ClientRaceState.read(copy);
-				// The choice was made (here or by an operator): the lore and choice screens are done
-				if (ClientRaceState.race != null && (client.screen instanceof LoreScreen || client.screen instanceof RaceSelectScreen)) {
-					client.setScreen(null);
-				}
-			});
-		});
-		Client.registerGlobalReceiver(RacePackets.ECHOES, (client, handler, buf, sender) -> {
-			FriendlyByteBuf copy = new FriendlyByteBuf(buf.copy());
-			client.execute(() -> EchoVisuals.read(copy));
-		});
-		Client.registerGlobalReceiver(RacePackets.FACES, (client, handler, buf, sender) -> {
-			FriendlyByteBuf copy = new FriendlyByteBuf(buf.copy());
-			client.execute(() -> FaceVisuals.read(copy));
-		});
-		Client.registerGlobalReceiver(RacePackets.QUICKENED, (client, handler, buf, sender) -> {
-			FriendlyByteBuf copy = new FriendlyByteBuf(buf.copy());
-			client.execute(() -> QuickenVisuals.read(copy));
-		});
-		Client.registerGlobalReceiver(RacePackets.FX, (client, handler, buf, sender) -> {
-			FriendlyByteBuf copy = new FriendlyByteBuf(buf.copy());
-			client.execute(() -> FxRenderer.read(copy));
-		});
-		Client.registerGlobalReceiver(RacePackets.OPEN_CHOICE, (client, handler, buf, sender) ->
-				client.execute(() -> client.setScreen(new LoreScreen())));
-		ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> client.execute(() -> {
-			ClientRaceState.clear();
-			EchoVisuals.clear();
-			FaceVisuals.clear();
-			QuickenVisuals.clear();
-			FxRenderer.clear();
-		}));
-		HudRenderCallback.EVENT.register(RaceHud::render);
-		WorldRenderEvents.AFTER_ENTITIES.register(QuickenVisuals::render);
-		WorldRenderEvents.AFTER_TRANSLUCENT.register(FxRenderer::render);
-		HudRenderCallback.EVENT.register(FxRenderer::renderScreen);
-		ClientTickEvents.END_CLIENT_TICK.register(MagesLegacyClient::tick);
-	}
+        net.minecraft.client.renderer.ItemBlockRenderTypes.setRenderLayer(MagesLegacy.MYCELIUM_NODE.get(), RenderType.cutout());
+        Client.registerGlobalReceiver(RacePackets.SYNC, (client, handler, buf, sender) -> {
+            ClientRaceState.read(buf);
+            if (ClientRaceState.race != null && (client.screen instanceof LoreScreen || client.screen instanceof RaceSelectScreen)) client.setScreen(null);
+        });
+        Client.registerGlobalReceiver(RacePackets.ECHOES, (client, handler, buf, sender) -> EchoVisuals.read(buf));
+        Client.registerGlobalReceiver(RacePackets.FACES, (client, handler, buf, sender) -> FaceVisuals.read(buf));
+        Client.registerGlobalReceiver(RacePackets.QUICKENED, (client, handler, buf, sender) -> QuickenVisuals.read(buf));
+        Client.registerGlobalReceiver(RacePackets.FX, (client, handler, buf, sender) -> FxRenderer.read(buf));
+        Client.registerGlobalReceiver(RacePackets.OPEN_CHOICE, (client, handler, buf, sender) -> client.setScreen(new LoreScreen()));
+        var events = net.neoforged.neoforge.common.NeoForge.EVENT_BUS;
+        events.addListener((net.neoforged.neoforge.client.event.ClientPlayerNetworkEvent.LoggingOut event) -> {
+            ClientRaceState.clear(); EchoVisuals.clear(); FaceVisuals.clear(); QuickenVisuals.clear(); FxRenderer.clear();
+        });
+        events.addListener((net.neoforged.neoforge.client.event.RenderGuiEvent.Post event) -> {
+            float delta = event.getPartialTick().getGameTimeDeltaPartialTick(false);
+            RaceHud.render(event.getGuiGraphics(), delta); FxRenderer.renderScreen(event.getGuiGraphics(), delta);
+        });
+        events.addListener((net.neoforged.neoforge.client.event.RenderLevelStageEvent event) -> {
+            var context = new RenderContext(event.getPoseStack(), event.getCamera(), Minecraft.getInstance().renderBuffers().bufferSource(), event.getPartialTick().getGameTimeDeltaPartialTick(false));
+            if (event.getStage() == net.neoforged.neoforge.client.event.RenderLevelStageEvent.Stage.AFTER_ENTITIES) QuickenVisuals.render(context);
+            if (event.getStage() == net.neoforged.neoforge.client.event.RenderLevelStageEvent.Stage.AFTER_TRANSLUCENT_BLOCKS) FxRenderer.render(context);
+        });
+        events.addListener((net.neoforged.neoforge.client.event.ClientTickEvent.Post event) -> tick(Minecraft.getInstance()));
+    }
 
 	private static void tick(Minecraft client) {
 		ClientRaceState.tick();
@@ -176,7 +160,7 @@ public class MagesLegacyClient implements ClientModInitializer {
 			}
 			KeyMapping probe = ours;
 			boolean defaultFree = java.util.Arrays.stream(client.options.keyMappings)
-					.noneMatch(other -> other != probe && KeyBindingHelper.getBoundKeyOf(other).equals(probe.getDefaultKey()));
+					.noneMatch(other -> other != probe && other.getKey().equals(probe.getDefaultKey()));
 			if (defaultFree) {
 				MagesLegacy.LOGGER.info("Key {} clashed with another mod; back to its default {}", ours.getName(), ours.getDefaultKey().getName());
 				ours.setKey(ours.getDefaultKey());
@@ -202,7 +186,7 @@ public class MagesLegacyClient implements ClientModInitializer {
 		while (binding.consumeClick()) {
 			fired = true;
 		}
-		InputConstants.Key key = KeyBindingHelper.getBoundKeyOf(binding);
+		InputConstants.Key key = binding.getKey();
 		boolean down = key.getType() == InputConstants.Type.KEYSYM && key.getValue() != InputConstants.UNKNOWN.getValue()
 				&& InputConstants.isKeyDown(client.getWindow().getWindow(), key.getValue());
 		boolean edge = down && !DOWN[index];
