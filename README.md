@@ -1,8 +1,10 @@
+> **Отдельная версия Codex.** Установка в отдельную папку игры: [CODEX.md](CODEX.md).
+
 # Mage's Legacy
 
-![Выбор расы](https://github.com/stardely62-oss/mages-legacy/releases/download/dev/screenshot.png)
+![Выбор расы](https://github.com/stardely62-oss/mages-legacy-codex/releases/download/dev/screenshot.png)
 
-Fabric-мод для **Minecraft 1.20.1** от euf, второй мод сборки после [Ender Obelisks](https://github.com/stardely62-oss/modhyed).
+Fabric-мод для **Minecraft 1.20.1** от euf, второй мод сборки после [Ender Obelisks](https://github.com/stardely62-oss/modhyed-codex).
 
 > Когда-то все люди были одним народом. Потом пришёл маг, поднявший первый обелиск, и разделил их на пять рас.
 > Маг ушёл, но его дар спит в крови каждого, кто рождается в этом мире.
@@ -185,7 +187,7 @@ Fabric-мод для **Minecraft 1.20.1** от euf, второй мод сбор
 ## Установка (TLauncher)
 
 1. В TLauncher выбери **Fabric 1.20.1** и запусти один раз до главного меню.
-2. Скачай `mages-legacy-updater.zip` из [последней сборки](https://github.com/stardely62-oss/mages-legacy/releases/tag/dev), распакуй и запусти `update-mages-legacy.bat`.
+2. Скачай `mages-legacy-updater.zip` из [последней сборки](https://github.com/stardely62-oss/mages-legacy-codex/releases/tag/dev), распакуй и запусти `update-mages-legacy.bat`.
 
 ## Разработка
 

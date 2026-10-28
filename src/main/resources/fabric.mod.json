@@ -8,8 +8,8 @@
 		"euf"
 	],
 	"contact": {
-		"sources": "https://github.com/stardely62-oss/mages-legacy",
-		"issues": "https://github.com/stardely62-oss/mages-legacy/issues"
+		"sources": "https://github.com/stardely62-oss/mages-legacy-codex",
+		"issues": "https://github.com/stardely62-oss/mages-legacy-codex/issues"
 	},
 	"license": "MIT",
 	"icon": "assets/mages_legacy/icon.png",

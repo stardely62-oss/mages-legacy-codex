@@ -2,18 +2,37 @@
 # Запуск: двойной клик по update-mages-legacy.bat (лежит рядом).
 #   -Stable           взять последний стабильный релиз (v*), а не свежую dev-сборку
 #   -VersionName "…"  имя версии в TLauncher (по умолчанию "Fabric 1.20.1")
-#   -GameDir "…"      папка игры (по умолчанию %APPDATA%\.minecraft)
+#   -GameDir "…"      папка игры (по умолчанию %APPDATA%\.minecraft-codex)
 param(
     [switch]$Stable,
     [string]$VersionName = 'Fabric 1.20.1',
-    [string]$GameDir = (Join-Path $env:APPDATA '.minecraft')
+    [string]$GameDir = (Join-Path $env:APPDATA '.minecraft-codex')
 )
 
 $ErrorActionPreference = 'Stop'
+
+# This installer exclusively owns a separate game directory.
+$isolatedRoot = [IO.Path]::GetFullPath((Join-Path $env:APPDATA '.minecraft-codex')).TrimEnd('\', '/')
+if ([IO.Path]::GetFullPath($GameDir).TrimEnd('\', '/') -ine $isolatedRoot) {
+    throw 'Use only %APPDATA%\.minecraft-codex. The original Minecraft directory is protected.'
+}
+function Assert-IsolatedPath([string]$path) {
+    $item = [IO.Path]::GetFullPath($path)
+    while ($item) {
+        if ((Test-Path -LiteralPath $item) -and ((Get-Item -LiteralPath $item -Force).Attributes -band [IO.FileAttributes]::ReparsePoint)) {
+            throw "Linked directories are not allowed: $item"
+        }
+        $parent = Split-Path -Parent $item
+        if ($parent -eq $item) { break }
+        $item = $parent
+    }
+}
+Assert-IsolatedPath $GameDir
+
 $ProgressPreference = 'SilentlyContinue'
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 
-$Repo = 'stardely62-oss/mages-legacy'
+$Repo = 'stardely62-oss/mages-legacy-codex'
 $Headers = @{ 'User-Agent' = 'mages-legacy-updater' }
 
 function Say($text, $color = 'Gray') { Write-Host $text -ForegroundColor $color }
@@ -28,6 +47,7 @@ try {
     }
     $mods = Join-Path $versionDir 'mods'
     if (-not (Test-Path $mods)) { $mods = Join-Path $GameDir 'mods' }
+    Assert-IsolatedPath $mods
     New-Item -ItemType Directory -Force -Path $mods | Out-Null
     Say "Папка модов: $mods"
 

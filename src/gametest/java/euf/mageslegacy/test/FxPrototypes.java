@@ -15,6 +15,10 @@ import com.lowdragmc.photon.client.gameobject.emitter.data.shape.IShape;
 import com.lowdragmc.photon.client.gameobject.emitter.data.shape.Sphere;
 import com.lowdragmc.photon.client.gameobject.emitter.particle.ParticleConfig;
 import com.lowdragmc.photon.client.gameobject.emitter.particle.ParticleEmitter;
+import com.lowdragmc.shimmer.client.light.ColorPointLight;
+import com.lowdragmc.shimmer.client.light.LightManager;
+import com.lowdragmc.shimmer.client.postprocessing.PostProcessing;
+import euf.mageslegacy.client.FxRenderer;
 import java.awt.Color;
 import java.util.ArrayList;
 import java.util.List;
@@ -148,6 +152,8 @@ final class FxPrototypes {
 		burst.start();
 		// The life drawn out: a glowing head trailing hearts and motes, arcing from the kissed to her chest
 		ParticleEmitter trail = emitter(GLOW, ROSE, 0.6f, 12, 0, sphere(0.05f), 0, 1.5f, 18);
+		trail.config.trails.setEnable(true);
+		trail.config.trails.setLifetime(NumberFunction.constant(0.5f));
 		ParticleEmitter crumbs = emitter(HEART, PALE, 0.16f, 18, 0.2f, sphere(0.15f), 0, 0.8f, 18);
 		Vec3d from = kissed.getPos().add(0, kissed.getHeight() * 0.7, 0);
 		MovingEffect stream = new MovingEffect(fx(trail, crumbs), world, t -> {
@@ -272,6 +278,41 @@ final class FxPrototypes {
 				.setLifetime(10)
 				.enableNoClip()
 				.spawn(world, c.x, c.y, c.z);
+	}
+
+	// ---- Shimmer: coloured light around an effect, and bloom for our own renderer ----
+
+	private record Light(ColorPointLight light, long until) {}
+
+	private static final List<Light> LIGHTS = new ArrayList<>();
+
+	/** A rose light at a point for {@code ticks}: the ground and walls around the effect take its colour. */
+	static void shimmerLight(Vec3d at, float radius, int ticks) {
+		ColorPointLight light = LightManager.INSTANCE.addLight(new Vector3f((float) at.x, (float) at.y, (float) at.z), 0xCCFF4F98, radius);
+		if (light != null) {
+			LIGHTS.add(new Light(light, world().getTime() + ticks));
+		}
+	}
+
+	/** Puts out lights whose time is up; called by the harness every tick. */
+	static void tickLights() {
+		long now = world() == null ? Long.MAX_VALUE : world().getTime();
+		LIGHTS.removeIf(l -> {
+			if (l.until() <= now) {
+				l.light().remove();
+				return true;
+			}
+			return false;
+		});
+	}
+
+	/** Our renderer's glow drawn into Shimmer's bloom too ({@code on}), or not. */
+	static void shimmerBloom(boolean on) {
+		FxRenderer.bloom = on ? draw -> PostProcessing.getBlockBloom().postEntity(draw::accept) : null;
+	}
+
+	static boolean shimmerLoaded() {
+		return net.fabricmc.loader.api.FabricLoader.getInstance().isModLoaded("shimmer");
 	}
 
 	static boolean photonLoaded() {

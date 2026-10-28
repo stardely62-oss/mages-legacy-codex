@@ -47,6 +47,12 @@ public final class FxRenderer {
 	/** The camera this frame: nothing is drawn right at the eye (see {@link #vertex}). */
 	private static Vec3d eye = Vec3d.ZERO;
 
+	/**
+	 * Optional: also draws the glow into a bloom pass (Shimmer's, when the harness tries it). Given a drawing that
+	 * takes a buffer source, it runs that drawing where the bloom wants it.
+	 */
+	public static java.util.function.Consumer<java.util.function.Consumer<VertexConsumerProvider>> bloom;
+
 	private FxRenderer() {
 	}
 
@@ -302,6 +308,19 @@ public final class FxRenderer {
 		VertexConsumer vc = immediate.getBuffer(RenderLayer.getLightning());
 		for (Effect e : EFFECTS) {
 			e.draw(m, vc, cam, context.tickDelta());
+		}
+		if (bloom != null) {
+			// The same glow once more into the bloom pass, with this frame's view
+			Matrix4f view = new Matrix4f(m);
+			float delta = context.tickDelta();
+			List<Effect> glowing = new ArrayList<>(EFFECTS);
+			bloom.accept(provider -> {
+				eye = cam;
+				VertexConsumer glow = provider.getBuffer(RenderLayer.getLightning());
+				for (Effect e : glowing) {
+					e.draw(view, glow, cam, delta);
+				}
+			});
 		}
 		context.matrixStack().pop();
 		immediate.draw(RenderLayer.getLightning());
