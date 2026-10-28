@@ -83,6 +83,7 @@ public class HarnessClient {
 	private final Deque<Step> steps = new ArrayDeque<>();
 	private final List<String> results = new ArrayList<>();
 	private int ticks;
+    private int startupTicks;
 	private int nextStepTick = 60;
 
 	private volatile BlockPos arena;
@@ -103,6 +104,7 @@ public class HarnessClient {
 		// Keys: JourneyMap is installed, the third ability was left on JourneyMap's G; the mod moved it, nothing clashes
 		step(1, false, c -> {
 			check("journeymap_loaded", ModList.get().isLoaded("journeymap"));
+            check("ender_obelisks_loaded", ModList.get().isLoaded("ender_obelisks"));
 			check("old_key_settled", MagesLegacyClient.ABILITY_KEYS[2].isDefault());
 			StringBuilder clashes = new StringBuilder();
 			for (KeyMapping ours : MagesLegacyClient.ourKeys()) {
@@ -1220,9 +1222,14 @@ public class HarnessClient {
 	}
 
 	private void tick(Minecraft client) {
-		if (client.player == null || client.level == null || client.getSingleplayerServer() == null || steps.isEmpty()) {
-			return;
-		}
+        if (client.player == null || client.level == null || client.getSingleplayerServer() == null) {
+            if (++startupTicks % 400 == 0) {
+                LOGGER.info("[harness] waiting for world; screen={}", client.screen == null ? "none" : client.screen.getClass().getName());
+                screenshot(client, "startup_waiting");
+            }
+            return;
+        }
+        if (steps.isEmpty()) return;
 		ticks++;
 		if (ticks < nextStepTick) {
 			return;

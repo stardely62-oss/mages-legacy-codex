@@ -10,6 +10,8 @@ block entities receive registry lookups. Data-pack directories use 1.21 names.
 CI builds only on GitHub-hosted runners. The native GameTest server and actual
 client under Xvfb must succeed before the `neoforge-dev` release is published.
 The harness loads the same pinned NeoForge JourneyMap as the pack installer.
+Mage’s Legacy also loads the verified Ender Obelisks NeoForge release in its
+client scenario, checking the two mods together as installed by the pack.
 Test sources and JourneyMap compile stubs are excluded from shipped jars.
 
 The previous Fabric `dev` releases and pack `modpack.json` remain unchanged.

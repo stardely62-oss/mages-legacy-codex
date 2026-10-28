@@ -16,7 +16,10 @@ public class GenWorldServer {
 		}
 		NeoForge.EVENT_BUS.addListener((ServerStartedEvent event) -> {
  var server = event.getServer();
-			LOGGER.info("[genworld] world created, stopping");
+			// NeoForge remembers approval of its experimental-dimension notice in world data.
+            // This generated CI fixture is intentionally disposable and has already been approved.
+            if (server.getWorldData() instanceof net.minecraft.world.level.storage.PrimaryLevelData data) data.withConfirmedWarning(true);
+            LOGGER.info("[genworld] world created, stopping");
 			server.halt(false);
 		});
 	}

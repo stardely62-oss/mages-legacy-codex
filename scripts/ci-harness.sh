@@ -35,6 +35,8 @@ rm -f "$CLIENT"/mods/journeymap-*.jar
 curl -sSfL -o "$CLIENT/mods/journeymap-neoforge-1.21.1-6.0.9.jar" "$JM_URL"
 echo "$JM_SHA512  $CLIENT/mods/journeymap-neoforge-1.21.1-6.0.9.jar" | sha512sum -c -
 
+python3 scripts/fetch-companion.py "$CLIENT/mods"
+
 # Skip first-launch screens and keep running without window focus. The third ability sits on G, as it did before
 # JourneyMap's G was known: the mod has to move it back to its free default by itself.
 # (version: 1.20.1's data version, or the options datafixer chokes on modern key names and drops the whole file)
