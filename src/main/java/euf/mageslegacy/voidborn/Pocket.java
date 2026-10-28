@@ -164,8 +164,7 @@ public final class Pocket {
 		if (home && server.getLevel(player.getRespawnDimension()) != null && player.getRespawnPosition() != null) {
 			ServerLevel spawnWorld = server.getLevel(player.getRespawnDimension());
 			BlockPos spawn = player.getRespawnPosition();
-			Vec3 at = net.minecraft.world.entity.player.Player.findRespawnPositionAndUseSpawnBlock(spawnWorld, spawn, player.getRespawnAngle(), player.isRespawnForced(), true)
-					.orElse(Vec3.atBottomCenterOf(spawnWorld.getSharedSpawnPos()));
+			Vec3 at = player.findRespawnPositionAndUseSpawnBlock(false, net.minecraft.world.level.portal.DimensionTransition.DO_NOTHING).pos();
 			player.teleportTo(spawnWorld, at.x, at.y, at.z, player.getYRot(), player.getXRot());
 		} else if (to == null || v.returnPos == null) {
 			to = server.overworld();

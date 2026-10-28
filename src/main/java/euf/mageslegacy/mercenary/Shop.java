@@ -19,7 +19,7 @@ import net.minecraft.world.effect.MobEffects;
 import net.minecraft.world.item.EnchantedBookItem;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
-import net.minecraft.world.item.alchemy.PotionUtils;
+import net.minecraft.world.item.alchemy.PotionContents;
 import net.minecraft.world.item.alchemy.Potions;
 import net.minecraft.world.item.enchantment.EnchantmentInstance;
 import net.minecraft.world.item.enchantment.Enchantments;
@@ -67,11 +67,11 @@ public final class Shop {
 			new Ware("leads", Kind.GOODS, 4, 1, 0, 0, () -> new ItemStack(Items.LEAD, 2)),
 			new Ware("pearls", Kind.GOODS, 10, 1, 0, 0, () -> new ItemStack(Items.ENDER_PEARL, 4)),
 			new Ware("bottles", Kind.GOODS, 8, 1, 0, 0, () -> new ItemStack(Items.EXPERIENCE_BOTTLE, 8)),
-			new Ware("healing", Kind.GOODS, 8, 1, 0, 0, () -> PotionUtils.setPotion(new ItemStack(Items.POTION), Potions.STRONG_HEALING)),
+			new Ware("healing", Kind.GOODS, 8, 1, 0, 0, () -> PotionContents.createItemStack(Items.POTION, Potions.STRONG_HEALING)),
 			new Ware("golden_apple", Kind.GOODS, 15, 1, 0, 0, () -> new ItemStack(Items.GOLDEN_APPLE)),
 			new Ware("oblivion", Kind.GOODS, 40, 1, 0, 0, () -> new ItemStack(MagesLegacy.OBLIVION_SCROLL.get())),
 			new Ware("blaze_rods", Kind.GOODS, 10, 2, 0, 0, () -> new ItemStack(Items.BLAZE_ROD, 4)),
-			new Ware("fire_resistance", Kind.GOODS, 10, 2, 0, 0, () -> PotionUtils.setPotion(new ItemStack(Items.POTION), Potions.LONG_FIRE_RESISTANCE)),
+			new Ware("fire_resistance", Kind.GOODS, 10, 2, 0, 0, () -> PotionContents.createItemStack(Items.POTION, Potions.LONG_FIRE_RESISTANCE)),
 			new Ware("ghast_tears", Kind.GOODS, 12, 2, 0, 0, () -> new ItemStack(Items.GHAST_TEAR, 2)),
 			new Ware("diamonds", Kind.GOODS, 18, 2, 1, 0, () -> new ItemStack(Items.DIAMOND, 2)),
 			new Ware("book", Kind.GOODS, 20, 2, 1, 0, () -> new ItemStack(Items.ENCHANTED_BOOK)),
@@ -168,7 +168,7 @@ public final class Shop {
 		return true;
 	}
 
-	private static void hire(ServerPlayer player, MobEffect effect, int amplifier) {
+	private static void hire(ServerPlayer player, net.minecraft.core.Holder<MobEffect> effect, int amplifier) {
 		player.addEffect(new MobEffectInstance(effect, HIRE_TICKS, amplifier, true, false, true));
 	}
 }

@@ -68,7 +68,7 @@ public class OblivionScrollItem extends Item {
 	}
 
 	@Override
-	public void appendHoverText(ItemStack stack, @Nullable Level world, List<Component> tooltip, TooltipFlag context) {
+	public void appendHoverText(ItemStack stack, Item.TooltipContext tooltipContext, List<Component> tooltip, TooltipFlag context) {
 		tooltip.add(Component.translatable("mages_legacy.scroll.lore").withStyle(ChatFormatting.GRAY, ChatFormatting.ITALIC));
 		tooltip.add(Component.translatable("mages_legacy.scroll.desc").withStyle(ChatFormatting.GOLD));
 	}

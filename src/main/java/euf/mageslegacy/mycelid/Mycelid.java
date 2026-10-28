@@ -98,11 +98,11 @@ public final class Mycelid {
 	private static final int REBIRTH_COOLDOWN = 24000;
 	private static final int MIND_RADIUS = 24;
 	private static final int NODE_COOLDOWN = 100;
-	private static final UUID CAP_ARMOR = UUID.fromString("6d3f8a52-2a7e-4f0e-9a51-3c1b6f0e7c11");
-	private static final UUID HEARTY_HEALTH = UUID.fromString("0b8e4c1d-5f2a-4c7e-8d31-9a6f2e4b7c22");
+	private static final net.minecraft.resources.ResourceLocation CAP_ARMOR = euf.mageslegacy.MagesLegacy.id("attribute/mycelid/cap_armor");
+	private static final net.minecraft.resources.ResourceLocation HEARTY_HEALTH = euf.mageslegacy.MagesLegacy.id("attribute/mycelid/hearty_health");
 
 	/** Mushroom -> the effect it gives as a taste. */
-	public static final Map<Item, MobEffect> DIET = Map.of(
+	public static final Map<Item, net.minecraft.core.Holder<MobEffect>> DIET = Map.of(
 			Items.RED_MUSHROOM, MobEffects.DAMAGE_BOOST,
 			Items.BROWN_MUSHROOM, MobEffects.DAMAGE_RESISTANCE,
 			Items.CRIMSON_FUNGUS, MobEffects.FIRE_RESISTANCE,
@@ -201,13 +201,13 @@ public final class Mycelid {
 	}
 
 	/** Adds or removes a talent's attribute bonus so it matches whether the talent applies right now. */
-	private static void modifier(ServerPlayer player, Attribute attribute, UUID id, String name, double amount, boolean want) {
+	private static void modifier(ServerPlayer player, net.minecraft.core.Holder<Attribute> attribute, net.minecraft.resources.ResourceLocation id, String name, double amount, boolean want) {
 		AttributeInstance instance = player.getAttribute(attribute);
 		if (instance == null || want == (instance.getModifier(id) != null)) {
 			return;
 		}
 		if (want) {
-			instance.addTransientModifier(new AttributeModifier(id, name, amount, AttributeModifier.Operation.ADDITION));
+			instance.addTransientModifier(new AttributeModifier(id, amount, AttributeModifier.Operation.ADD_VALUE));
 		} else {
 			instance.removeModifier(id);
 			player.setHealth(Math.min(player.getHealth(), player.getMaxHealth()));
@@ -235,7 +235,7 @@ public final class Mycelid {
 	}
 
 	/** Gives the effect only when it is missing or nearly over, so timed effects (regeneration) keep their rhythm. */
-	private static void refresh(ServerPlayer player, MobEffect effect, int amplifier, int duration, int below) {
+	private static void refresh(ServerPlayer player, net.minecraft.core.Holder<MobEffect> effect, int amplifier, int duration, int below) {
 		MobEffectInstance current = player.getEffect(effect);
 		if (current == null || current.getAmplifier() < amplifier || current.getDuration() <= below) {
 			player.addEffect(new MobEffectInstance(effect, duration, amplifier, true, false, true));
@@ -252,7 +252,7 @@ public final class Mycelid {
 
 	/** Eats a raw mushroom or fungus from the hand: spores, a little food and its taste. */
 	public static boolean eat(ServerPlayer player, RaceData data, ItemStack stack) {
-		MobEffect effect = DIET.get(stack.getItem());
+		net.minecraft.core.Holder<MobEffect> effect = DIET.get(stack.getItem());
 		if (effect == null || player.getCooldowns().isOnCooldown(stack.getItem())) {
 			return false;
 		}
@@ -282,13 +282,13 @@ public final class Mycelid {
 	}
 
 	/** Adds a taste; with one taste allowed (two with the talent), the oldest one fades. */
-	public static void taste(ServerPlayer player, RaceData data, MobEffect effect) {
-		String id = BuiltInRegistries.MOB_EFFECT.getKey(effect).toString();
+	public static void taste(ServerPlayer player, RaceData data, net.minecraft.core.Holder<MobEffect> effect) {
+		String id = BuiltInRegistries.MOB_EFFECT.getKey(effect.value()).toString();
 		data.tastes.remove(id);
 		data.tastes.add(id);
 		int max = data.has(Talents.FLESH_TWO_TASTES) ? 2 : 1;
 		while (data.tastes.size() > max) {
-			MobEffect old = BuiltInRegistries.MOB_EFFECT.get(ResourceLocation.parse(data.tastes.remove(0)));
+			net.minecraft.core.Holder<MobEffect> old = BuiltInRegistries.MOB_EFFECT.getHolder(ResourceLocation.parse(data.tastes.remove(0))).orElse(null);
 			if (old != null) {
 				player.removeEffect(old);
 			}
@@ -306,8 +306,8 @@ public final class Mycelid {
 		if (item == Items.MUSHROOM_STEW || item == Items.SUSPICIOUS_STEW) {
 			data.addResource(15);
 			Progression.addXp(player, data, DIET_XP, 5, DIET_XP_CAP);
-		} else if (food.isMeat() && !data.has(Talents.FLESH_MEAT)) {
-			int lost = food.getNutrition() / 2;
+		} else if (item.getDefaultInstance().is(net.minecraft.tags.ItemTags.MEAT) && !data.has(Talents.FLESH_MEAT)) {
+			int lost = food.nutrition() / 2;
 			player.getFoodData().setFoodLevel(Math.max(0, player.getFoodData().getFoodLevel() - lost));
 		}
 	}
@@ -566,7 +566,7 @@ public final class Mycelid {
 		Fx.burst(world, player.position().add(0, 1, 0), (float) radius + 1, 8, SPORE_RGB);
 		Fx.ring(world, player.position(), 0.5f, (float) radius + 2, 10, MOSS_INK);
 		Fx.shake(player, 2.0f, 8);
-		world.playSound(null, player.blockPosition(), SoundEvents.GENERIC_EXPLODE, SoundSource.PLAYERS, 0.5f, 1.6f);
+		world.playSound(null, player.blockPosition(), SoundEvents.GENERIC_EXPLODE.value(), SoundSource.PLAYERS, 0.5f, 1.6f);
 	}
 
 	/** Where a cloud is now: on its owner if it follows them, where it formed otherwise. */
@@ -836,7 +836,7 @@ public final class Mycelid {
 				}
 				if (data.has(Talents.NET_CLEANSE)) {
 					for (MobEffectInstance effect : new ArrayList<>(player.getActiveEffects())) {
-						if (effect.getEffect().getCategory() == MobEffectCategory.HARMFUL) {
+						if (effect.getEffect().value().getCategory() == MobEffectCategory.HARMFUL) {
 							player.removeEffect(effect.getEffect());
 						}
 					}

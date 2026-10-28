@@ -61,7 +61,7 @@ import net.minecraft.world.entity.projectile.ThrownPotion;
 import net.minecraft.world.entity.projectile.ThrownTrident;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
-import net.minecraft.world.item.alchemy.PotionUtils;
+import net.minecraft.world.item.alchemy.PotionContents;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.EntityHitResult;
@@ -101,10 +101,10 @@ public final class Masked {
 	private static final float RIP_AT = 0.35f;
 	private static final float RIP_AT_WEAK = 0.45f;
 
-	private static final UUID FACELESS_HEALTH = UUID.fromString("5f1d6d0a-4b0e-4a7e-9c55-0d3c6b1e7a01");
-	private static final UUID ZOMBIE_HEALTH = UUID.fromString("5f1d6d0a-4b0e-4a7e-9c55-0d3c6b1e7a02");
-	private static final UUID WITCH_HEALTH = UUID.fromString("5f1d6d0a-4b0e-4a7e-9c55-0d3c6b1e7a03");
-	private static final UUID WITHER_SPEED = UUID.fromString("5f1d6d0a-4b0e-4a7e-9c55-0d3c6b1e7a04");
+	private static final net.minecraft.resources.ResourceLocation FACELESS_HEALTH = euf.mageslegacy.MagesLegacy.id("attribute/masked/faceless_health");
+	private static final net.minecraft.resources.ResourceLocation ZOMBIE_HEALTH = euf.mageslegacy.MagesLegacy.id("attribute/masked/zombie_health");
+	private static final net.minecraft.resources.ResourceLocation WITCH_HEALTH = euf.mageslegacy.MagesLegacy.id("attribute/masked/witch_health");
+	private static final net.minecraft.resources.ResourceLocation WITHER_SPEED = euf.mageslegacy.MagesLegacy.id("attribute/masked/wither_speed");
 
 	/** Monsters of the wearer's kind that follow it for a while (Kin). */
 	private record Retinue(UUID owner, long until) {}
@@ -309,7 +309,7 @@ public final class Masked {
 				&& player.getItemBySlot(EquipmentSlot.HEAD).isEmpty() && !player.isInWaterOrRain();
 		if (sun && (worn == Face.ZOMBIE || worn == Face.SKELETON || worn == Face.DROWNED || worn == Face.PHANTOM)) {
 			if (!soft || player.getRandom().nextBoolean()) {
-				player.setSecondsOnFire(soft ? 2 : 4);
+				player.igniteForSeconds(soft ? 2 : 4);
 			}
 		}
 		if ((worn == Face.ENDERMAN || worn == Face.BLAZE) && player.isInWaterOrRain()) {
@@ -345,37 +345,37 @@ public final class Masked {
 		player.displayClientMessage(Component.translatable("mages_legacy.masked.crumbled", Component.translatable("mages_legacy.face." + face.id)).withStyle(ChatFormatting.GRAY), false);
 	}
 
-	private static void refresh(ServerPlayer player, MobEffect effect, int amplifier) {
+	private static void refresh(ServerPlayer player, net.minecraft.core.Holder<MobEffect> effect, int amplifier) {
 		MobEffectInstance current = player.getEffect(effect);
 		if (current == null || current.getDuration() <= 30) {
 			player.addEffect(new MobEffectInstance(effect, 60, amplifier, true, false, true));
 		}
 	}
 
-	private static void modifier(ServerPlayer player, Attribute attribute, UUID id, String name, double amount, boolean want) {
-		set(player, attribute, id, name, amount, AttributeModifier.Operation.ADDITION, want);
+	private static void modifier(ServerPlayer player, net.minecraft.core.Holder<Attribute> attribute, net.minecraft.resources.ResourceLocation id, String name, double amount, boolean want) {
+		set(player, attribute, id, name, amount, AttributeModifier.Operation.ADD_VALUE, want);
 	}
 
-	private static void modifierMultiply(ServerPlayer player, Attribute attribute, UUID id, String name, double amount, boolean want) {
-		set(player, attribute, id, name, amount, AttributeModifier.Operation.MULTIPLY_BASE, want);
+	private static void modifierMultiply(ServerPlayer player, net.minecraft.core.Holder<Attribute> attribute, net.minecraft.resources.ResourceLocation id, String name, double amount, boolean want) {
+		set(player, attribute, id, name, amount, AttributeModifier.Operation.ADD_MULTIPLIED_BASE, want);
 	}
 
 	/** Adds or removes an attribute change so it matches whether it applies right now (and its amount). */
-	private static void set(ServerPlayer player, Attribute attribute, UUID id, String name, double amount,
+	private static void set(ServerPlayer player, net.minecraft.core.Holder<Attribute> attribute, net.minecraft.resources.ResourceLocation id, String name, double amount,
 			AttributeModifier.Operation operation, boolean want) {
 		AttributeInstance instance = player.getAttribute(attribute);
 		if (instance == null) {
 			return;
 		}
 		AttributeModifier current = instance.getModifier(id);
-		if (want == (current != null) && (current == null || current.getAmount() == amount)) {
+		if (want == (current != null) && (current == null || current.amount() == amount)) {
 			return;
 		}
 		if (current != null) {
 			instance.removeModifier(id);
 		}
 		if (want) {
-			instance.addTransientModifier(new AttributeModifier(id, name, amount, operation));
+			instance.addTransientModifier(new AttributeModifier(id, amount, operation));
 		}
 		player.setHealth(Math.min(player.getHealth(), player.getMaxHealth()));
 	}
@@ -558,7 +558,7 @@ public final class Masked {
 		Fx.mask(world, at, player, 18, BONE_RGB);
 		world.sendParticles(ParticleTypes.WHITE_ASH, at.x, at.y, at.z, 20, 0.3, 0.3, 0.3, 0.02);
 		world.playSound(null, target.blockPosition(), SoundEvents.SHEEP_SHEAR, SoundSource.PLAYERS, 1.2f, 0.5f);
-		world.playSound(null, player.blockPosition(), SoundEvents.ARMOR_EQUIP_LEATHER, SoundSource.PLAYERS, 1.0f, 0.7f);
+		world.playSound(null, player.blockPosition(), SoundEvents.ARMOR_EQUIP_LEATHER.value(), SoundSource.PLAYERS, 1.0f, 0.7f);
 		return AbilityResult.OK;
 	}
 
@@ -685,7 +685,7 @@ public final class Masked {
 	private static AbilityResult volley(ServerPlayer player, float m) {
 		ServerLevel world = player.serverLevel();
 		for (int i = -2; i <= 2; i++) {
-			Arrow arrow = new Arrow(world, player);
+			Arrow arrow = new Arrow(world, player, new ItemStack(Items.ARROW), null);
 			arrow.shootFromRotation(player, player.getXRot(), player.getYRot() + i * 6, 0, 2.8f, 1.0f);
 			arrow.setBaseDamage(1.2 * m);
 			arrow.pickup = AbstractArrow.Pickup.CREATIVE_ONLY;
@@ -726,7 +726,7 @@ public final class Masked {
 		world.sendParticles(ParticleTypes.EXPLOSION_EMITTER, at.x, at.y + 1, at.z, 1, 0, 0, 0, 0);
 		Fx.ring(world, at, 0.5f, 6, 14, GLINT_RGB);
 		Fx.shake(player, 2.0f, 10);
-		world.playSound(null, player.blockPosition(), SoundEvents.GENERIC_EXPLODE, SoundSource.PLAYERS, 1.2f, 1.0f);
+		world.playSound(null, player.blockPosition(), SoundEvents.GENERIC_EXPLODE.value(), SoundSource.PLAYERS, 1.2f, 1.0f);
 		return AbilityResult.OK;
 	}
 
@@ -787,7 +787,7 @@ public final class Masked {
 		ServerLevel world = player.serverLevel();
 		for (LivingEntity e : world.getEntitiesOfClass(LivingEntity.class, target.getBoundingBox().inflate(2),
 				e -> e != player && e.isAlive() && !(e instanceof Player) && !RETINUE.containsKey(e.getUUID()))) {
-			e.setSecondsOnFire(6);
+			e.igniteForSeconds(6);
 			e.hurt(world.damageSources().indirectMagic(player, player), (e == target ? 4 : 2) * m);
 			world.sendParticles(ParticleTypes.FLAME, e.getX(), e.getY() + e.getBbHeight() / 2, e.getZ(), 16, 0.3, 0.5, 0.3, 0.03);
 		}
@@ -800,11 +800,12 @@ public final class Masked {
 	/** Witch, the Brew: a thrown flask of poison, weakness and slowness, and a sip of regeneration for herself. */
 	private static AbilityResult brew(ServerPlayer player, float m) {
 		ServerLevel world = player.serverLevel();
-		ItemStack flask = PotionUtils.setCustomEffects(new ItemStack(Items.SPLASH_POTION), List.of(
+		ItemStack flask = new ItemStack(Items.SPLASH_POTION);
+        flask.set(net.minecraft.core.component.DataComponents.POTION_CONTENTS, new PotionContents(java.util.Optional.empty(), java.util.Optional.of(0x4E8A3A), List.of(
 				new MobEffectInstance(MobEffects.POISON, Math.round(120 * m), 1),
 				new MobEffectInstance(MobEffects.WEAKNESS, 160, 0),
-				new MobEffectInstance(MobEffects.MOVEMENT_SLOWDOWN, 160, 0)));
-		flask.getOrCreateTag().putInt("CustomPotionColor", 0x4E8A3A);
+				new MobEffectInstance(MobEffects.MOVEMENT_SLOWDOWN, 160, 0))));
+
 		ThrownPotion potion = new ThrownPotion(world, player);
 		potion.setItem(flask);
 		potion.shootFromRotation(player, player.getXRot(), player.getYRot(), -20.0f, 0.9f, 1.0f);
@@ -1104,7 +1105,7 @@ public final class Masked {
 		TRACE.remove(id);
 		BLADE.remove(id);
 		RETINUE.values().removeIf(r -> r.owner().equals(id));
-		for (UUID modifier : List.of(FACELESS_HEALTH, ZOMBIE_HEALTH, WITCH_HEALTH)) {
+		for (net.minecraft.resources.ResourceLocation modifier : List.of(FACELESS_HEALTH, ZOMBIE_HEALTH, WITCH_HEALTH)) {
 			AttributeInstance health = player.getAttribute(Attributes.MAX_HEALTH);
 			if (health != null) {
 				health.removeModifier(modifier);

@@ -65,8 +65,8 @@ public class MagesLegacy {
         events.addListener((net.neoforged.neoforge.event.RegisterCommandsEvent event) -> RaceCommand.register(event.getDispatcher()));
         events.addListener((net.neoforged.neoforge.event.tick.ServerTickEvent.Post event) -> tick(event.getServer()));
         events.addListener((net.neoforged.neoforge.event.tick.ServerTickEvent.Pre event) -> Voidborn.tickSleep(event.getServer()));
-        events.addListener((net.neoforged.neoforge.event.entity.player.PlayerSleepInBedEvent event) -> {
-            if (event.getEntity() instanceof ServerPlayer player && Voidborn.mayNotSleep(player)) event.setResult(Player.BedSleepingProblem.OTHER_PROBLEM);
+        events.addListener((net.neoforged.neoforge.event.entity.player.CanPlayerSleepEvent event) -> {
+            if (Voidborn.mayNotSleep(event.getEntity())) event.setProblem(Player.BedSleepingProblem.OTHER_PROBLEM);
         });
         events.addListener((net.neoforged.neoforge.event.server.ServerStoppedEvent event) -> {
             Mycelid.reset(); Frozen.reset(); Bloodkin.reset(); Voidborn.reset(); Mercenary.reset(); Tempter.reset(); Masked.reset(); Echoes.reset(); Creatures.reset();

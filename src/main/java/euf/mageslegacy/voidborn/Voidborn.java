@@ -222,7 +222,7 @@ public final class Voidborn {
 		}
 	}
 
-	private static void refresh(ServerPlayer player, MobEffect effect, int duration) {
+	private static void refresh(ServerPlayer player, net.minecraft.core.Holder<MobEffect> effect, int duration) {
 		MobEffectInstance current = player.getEffect(effect);
 		if (current == null || current.getDuration() <= 30) {
 			player.addEffect(new MobEffectInstance(effect, duration, 0, true, false, true));
@@ -594,7 +594,7 @@ public final class Voidborn {
 				}
 			}
 			// Arrows not of their own, and loose things; with Swallowing, arrows reaching the heart are gone
-			for (Entity e : world.getEntities(null, reach, e -> e instanceof ItemEntity
+			for (Entity e : world.getEntities((Entity) null, reach, e -> e instanceof ItemEntity
 					|| e instanceof Projectile p && (owner == null || p.getOwner() != owner))) {
 				pull(e, w.center(), 0.12, w.radius());
 				if (e instanceof Projectile && data != null && data.has(Talents.WELL_EAT) && e.position().distanceTo(w.center()) < 1.2) {
@@ -649,7 +649,7 @@ public final class Voidborn {
 		Fx.ring(world, ground(world, c), 6, 0.3f, 10, VOID_INK);
 		world.sendParticles(ModParticles.VOID_MOTE.get(), c.x, c.y, c.z, 40, 0.3, 0.3, 0.3, 0.25);
 		world.sendParticles(ModParticles.STAR.get(), c.x, c.y, c.z, 20, 1.2, 1.2, 1.2, 0.0);
-		world.playSound(null, BlockPos.containing(c), SoundEvents.GENERIC_EXPLODE, SoundSource.PLAYERS, 0.7f, 0.5f);
+		world.playSound(null, BlockPos.containing(c), SoundEvents.GENERIC_EXPLODE.value(), SoundSource.PLAYERS, 0.7f, 0.5f);
 		world.playSound(null, BlockPos.containing(c), SoundEvents.BEACON_DEACTIVATE, SoundSource.PLAYERS, 1.0f, 0.6f);
 	}
 
@@ -781,7 +781,7 @@ public final class Voidborn {
 		ServerLevel to = player.getServer().getLevel(player.getRespawnDimension());
 		BlockPos spawn = player.getRespawnPosition();
 		Vec3 at = to != null && spawn != null
-				? Player.findRespawnPositionAndUseSpawnBlock(to, spawn, player.getRespawnAngle(), player.isRespawnForced(), true).orElse(null) : null;
+				? player.findRespawnPositionAndUseSpawnBlock(false, net.minecraft.world.level.portal.DimensionTransition.DO_NOTHING).pos() : null;
 		if (at == null) {
 			to = player.getServer().overworld();
 			at = Vec3.atBottomCenterOf(to.getSharedSpawnPos());

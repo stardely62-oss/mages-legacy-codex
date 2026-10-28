@@ -2,7 +2,7 @@ package euf.mageslegacy.race;
 
 import euf.mageslegacy.net.RacePackets;
 import net.minecraft.ChatFormatting;
-import net.minecraft.advancements.Advancement;
+import net.minecraft.advancements.AdvancementHolder;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
@@ -32,7 +32,7 @@ public final class Progression {
 		if (data == null || data.level < TIER_LEVELS[tier - 1]) {
 			return false;
 		}
-		Advancement advancement = player.server.getAdvancements().getAdvancement(ResourceLocation.parse(MILESTONES[tier - 1]));
+		AdvancementHolder advancement = player.server.getAdvancements().get(ResourceLocation.parse(MILESTONES[tier - 1]));
 		return advancement != null && player.getAdvancements().getOrStartProgress(advancement).isDone();
 	}
 

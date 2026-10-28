@@ -265,10 +265,10 @@ public final class Bloodkin {
 		if (data.has(Talents.NIGHT_SHADE) && world.getGameTime() / 20 % 2 == 0) {
 			return;
 		}
-		player.setSecondsOnFire(3);
+		player.igniteForSeconds(3);
 	}
 
-	private static void refresh(ServerPlayer player, MobEffect effect, int amplifier, int duration, int below) {
+	private static void refresh(ServerPlayer player, net.minecraft.core.Holder<MobEffect> effect, int amplifier, int duration, int below) {
 		MobEffectInstance current = player.getEffect(effect);
 		if (current == null || current.getAmplifier() < amplifier || current.getDuration() <= below) {
 			player.addEffect(new MobEffectInstance(effect, duration, amplifier, true, false, true));
@@ -294,7 +294,7 @@ public final class Bloodkin {
 
 	/** Ordinary food feeds a Bloodkin only a third. */
 	public static void afterEating(ServerPlayer player, FoodProperties food) {
-		int lost = food.getNutrition() * 2 / 3;
+		int lost = food.nutrition() * 2 / 3;
 		player.getFoodData().setFoodLevel(Math.max(0, player.getFoodData().getFoodLevel() - lost));
 		player.getFoodData().setSaturation(Math.min(player.getFoodData().getSaturationLevel(),
 				player.getFoodData().getFoodLevel()) / 3);
@@ -502,7 +502,7 @@ public final class Bloodkin {
 		Fx.shake(player, 0.8f, 5);
 		world.sendParticles(ModParticles.BLOOD_MIST.get(), player.getX(), player.getY() + 0.9, player.getZ(), 8, 0.3, 0.5, 0.3, 0.02);
 		world.playSound(null, player.blockPosition(), SoundEvents.PHANTOM_FLAP, SoundSource.PLAYERS, 1.0f, 0.6f);
-		world.playSound(null, player.blockPosition(), SoundEvents.TRIDENT_RIPTIDE_1, SoundSource.PLAYERS, 0.8f, 1.4f);
+		world.playSound(null, player.blockPosition(), SoundEvents.TRIDENT_RIPTIDE_1.value(), SoundSource.PLAYERS, 0.8f, 1.4f);
 		return AbilityResult.OK;
 	}
 

@@ -66,10 +66,10 @@ public final class Bonds {
 	public static final int PET_GAP = 2400;
 	public static final int NOT_TODAY_GAP = 6000;
 	private static final int TURTLE_SLOT = 6;
-	private static final UUID LEVEL_HEALTH = UUID.fromString("5a7c3e91-2b4d-4f6a-8c1e-7d9b2f4a6c55");
-	private static final UUID THICK_FUR = UUID.fromString("9b2e6d14-3c5a-4e7f-a1d8-6f3c9e2b7a66");
-	private static final UUID ALPHA_HEALTH = UUID.fromString("1d6f8a3b-4e2c-4b9d-b7a5-3e8c2f6d9b77");
-	private static final UUID ALPHA_DAMAGE = UUID.fromString("7f3a9c25-6d1b-4a8e-9c4f-2b7e5d1a3c88");
+	private static final net.minecraft.resources.ResourceLocation LEVEL_HEALTH = euf.mageslegacy.MagesLegacy.id("attribute/bonds/level_health");
+	private static final net.minecraft.resources.ResourceLocation THICK_FUR = euf.mageslegacy.MagesLegacy.id("attribute/bonds/thick_fur");
+	private static final net.minecraft.resources.ResourceLocation ALPHA_HEALTH = euf.mageslegacy.MagesLegacy.id("attribute/bonds/alpha_health");
+	private static final net.minecraft.resources.ResourceLocation ALPHA_DAMAGE = euf.mageslegacy.MagesLegacy.id("attribute/bonds/alpha_damage");
 
 	private Bonds() {
 	}
@@ -548,7 +548,7 @@ public final class Bonds {
 		Creatures.registerBeast(mob, owner);
 		if (mob instanceof TamableAnimal tame) {
 			tame.setOwnerUUID(owner);
-			tame.setTame(true);
+			tame.setTame(true, true);
 		} else {
 			// Foxes and polar bears fight for their Shepherd; bees, axolotls, goats and frogs help in their own ways
 			Creatures.teach(mob, mob.getType() == EntityType.FOX || mob.getType() == EntityType.POLAR_BEAR);
@@ -597,19 +597,19 @@ public final class Bonds {
 		return bond.level / 5 + (data.has(Talents.PACK_SKILL) ? 1 : 0) + (isAlpha(data, bond) ? 2 : 0);
 	}
 
-	private static void modifier(LivingEntity entity, net.minecraft.world.entity.ai.attributes.Attribute attribute, UUID id, String name,
+	private static void modifier(LivingEntity entity, net.minecraft.core.Holder<net.minecraft.world.entity.ai.attributes.Attribute> attribute, net.minecraft.resources.ResourceLocation id, String name,
 			double amount, boolean want) {
 		AttributeInstance instance = entity.getAttribute(attribute);
 		if (instance == null) {
 			return;
 		}
 		AttributeModifier current = instance.getModifier(id);
-		if (current != null && (!want || current.getAmount() != amount)) {
+		if (current != null && (!want || current.amount() != amount)) {
 			instance.removeModifier(id);
 			current = null;
 		}
 		if (want && current == null && amount != 0) {
-			instance.addPermanentModifier(new AttributeModifier(id, name, amount, AttributeModifier.Operation.ADDITION));
+			instance.addPermanentModifier(new AttributeModifier(id, amount, AttributeModifier.Operation.ADD_VALUE));
 		}
 		if (entity.getHealth() > entity.getMaxHealth()) {
 			entity.setHealth(entity.getMaxHealth());
@@ -658,7 +658,7 @@ public final class Bonds {
 			if (bond.name.isEmpty()) {
 				bond.body.remove("CustomName");
 			} else {
-				bond.body.putString("CustomName", Component.Serializer.toJson(Component.literal(bond.name)));
+				bond.body.putString("CustomName", Component.Serializer.toJson(Component.literal(bond.name), owner.registryAccess()));
 			}
 		}
 		data.dirty = true;
@@ -1001,7 +1001,7 @@ public final class Bonds {
 					owner.addEffect(new MobEffectInstance(MobEffects.DAMAGE_RESISTANCE, 200, Math.min(3, 1 + p / 2), true, true, true));
 					owner.addEffect(new MobEffectInstance(MobEffects.ABSORPTION, 200, 1 + p / 3, true, true, true));
 					data.readyAt.put(TURTLE_SLOT, ticks + Math.max(600, 1800 - 200 * p));
-					world.playSound(null, owner.blockPosition(), SoundEvents.ARMOR_EQUIP_TURTLE, SoundSource.PLAYERS, 1.0f, 0.8f);
+					world.playSound(null, owner.blockPosition(), SoundEvents.ARMOR_EQUIP_TURTLE.value(), SoundSource.PLAYERS, 1.0f, 0.8f);
 					owner.displayClientMessage(Component.translatable("mages_legacy.beast.turtle.shell").withStyle(ChatFormatting.GREEN), true);
 					beastXp(owner, data, bond, mob, 10);
 				}

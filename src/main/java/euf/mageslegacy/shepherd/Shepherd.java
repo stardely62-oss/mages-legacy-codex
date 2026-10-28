@@ -70,7 +70,7 @@ public final class Shepherd {
 	private static final int ARMY_SLOT = AbilitySlots.cooldownSlot(Race.SHEPHERD, 4);
 	private static final int ARMY_COOLDOWN = 6000;
 	private static final int ARMY_KINDS = 6;
-	private static final UUID FRAIL = UUID.fromString("2e8b5c1f-7a3d-4c6e-9f2b-1d5a8e3c7b99");
+	private static final net.minecraft.resources.ResourceLocation FRAIL = euf.mageslegacy.MagesLegacy.id("attribute/shepherd/frail");
 
 	private Shepherd() {
 	}
@@ -161,14 +161,14 @@ public final class Shepherd {
 			return;
 		}
 		AttributeModifier current = health.getModifier(FRAIL);
-		if (current != null && current.getAmount() == amount) {
+		if (current != null && current.amount() == amount) {
 			return;
 		}
 		if (current != null) {
 			health.removeModifier(FRAIL);
 		}
 		if (amount != 0) {
-			health.addTransientModifier(new AttributeModifier(FRAIL, "shepherd_frail", amount, AttributeModifier.Operation.ADDITION));
+			health.addTransientModifier(new AttributeModifier(FRAIL, amount, AttributeModifier.Operation.ADD_VALUE));
 			player.setHealth(Math.min(player.getHealth(), player.getMaxHealth()));
 		}
 	}
@@ -457,7 +457,7 @@ public final class Shepherd {
 			c.addEffect(new MobEffectInstance(MobEffects.DAMAGE_RESISTANCE, 200, loud ? 1 : 0, false, true));
 			c.heal(c.getMaxHealth() * (warm ? RALLY_HEAL_WARM : RALLY_HEAL));
 			if (warm) {
-				c.getActiveEffects().stream().filter(e -> !e.getEffect().isBeneficial()).map(MobEffectInstance::getEffect).toList()
+				c.getActiveEffects().stream().filter(e -> !e.getEffect().value().isBeneficial()).map(MobEffectInstance::getEffect).toList()
 						.forEach(c::removeEffect);
 			}
 			world.sendParticles(ParticleTypes.ANGRY_VILLAGER, c.getX(), c.getY() + c.getBbHeight() + 0.3, c.getZ(), 1, 0, 0, 0, 0);
@@ -508,7 +508,7 @@ public final class Shepherd {
 		Fx.shake(player, 2.0f, 12);
 		world.sendParticles(Echoes.SPIRIT, player.getX(), player.getY() + 1, player.getZ(), 60, 2.5, 0.8, 2.5, 0.04);
 		world.playSound(null, player.blockPosition(), SoundEvents.RAID_HORN.value(), SoundSource.PLAYERS, 1.0f, 0.6f);
-		world.playSound(null, player.blockPosition(), SoundEvents.SOUL_ESCAPE, SoundSource.PLAYERS, 2.0f, 0.5f);
+		world.playSound(null, player.blockPosition(), SoundEvents.SOUL_ESCAPE.value(), SoundSource.PLAYERS, 2.0f, 0.5f);
 		return AbilityResult.OK;
 	}
 
@@ -693,7 +693,7 @@ public final class Shepherd {
 				data.shepherd.selectedEcho = type.id();
 			}
 			owner.displayClientMessage(Component.translatable("mages_legacy.echo.learned", type.type().getDescription()).withStyle(ChatFormatting.AQUA), false);
-			owner.level().playSound(null, owner.blockPosition(), SoundEvents.SOUL_ESCAPE, SoundSource.PLAYERS, 1.5f, 0.6f);
+			owner.level().playSound(null, owner.blockPosition(), SoundEvents.SOUL_ESCAPE.value(), SoundSource.PLAYERS, 1.5f, 0.6f);
 			Progression.addXp(owner, data, ECHO_LEARNED_XP);
 		}
 	}

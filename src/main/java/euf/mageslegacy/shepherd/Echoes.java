@@ -52,8 +52,8 @@ import org.jetbrains.annotations.Nullable;
  */
 public final class Echoes {
 	public static final String TAG = "mages_legacy_echo";
-	private static final UUID STURDY = UUID.fromString("3c9d2b7e-6a14-4f0b-9e2d-5b8c1a7f4e33");
-	private static final UUID WEAPONS = UUID.fromString("8e1f4a2c-7b35-4d9e-a6c0-2f5b9d3e1a44");
+	private static final net.minecraft.resources.ResourceLocation STURDY = euf.mageslegacy.MagesLegacy.id("attribute/echoes/sturdy");
+	private static final net.minecraft.resources.ResourceLocation WEAPONS = euf.mageslegacy.MagesLegacy.id("attribute/echoes/weapons");
 	/** Spirit wisps (the race's own particle): pale cyan flames that rise and flicker. */
 	public static final ParticleOptions SPIRIT = ModParticles.WISP.get();
 
@@ -275,7 +275,7 @@ public final class Echoes {
 			return null;
 		}
 		mob.moveTo(at.x, at.y, at.z, player.getYRot() + 180, 0);
-		mob.finalizeSpawn(world, world.getCurrentDifficultyAt(mob.blockPosition()), MobSpawnType.MOB_SUMMONED, null, null);
+		mob.finalizeSpawn(world, world.getCurrentDifficultyAt(mob.blockPosition()), MobSpawnType.MOB_SUMMONED, null);
 		// No jockeys: a skeleton riding the spider or a chicken under the zombie would be ordinary hostile mobs
 		mob.getPassengers().forEach(Entity::discard);
 		if (mob.getVehicle() != null) {
@@ -291,11 +291,11 @@ public final class Echoes {
 		mob.setCustomNameVisible(false);
 		mob.addEffect(new MobEffectInstance(MobEffects.FIRE_RESISTANCE, MobEffectInstance.INFINITE_DURATION, 0, true, false));
 		if (data.has(Talents.LEGION_STURDY)) {
-			addModifier(mob, Attributes.MAX_HEALTH, STURDY, 0.2, AttributeModifier.Operation.MULTIPLY_BASE);
+			addModifier(mob, Attributes.MAX_HEALTH, STURDY, 0.2, AttributeModifier.Operation.ADD_MULTIPLIED_BASE);
 			mob.setHealth(mob.getMaxHealth());
 		}
 		if (data.has(Talents.LEGION_WEAPONS)) {
-			addModifier(mob, Attributes.ATTACK_DAMAGE, WEAPONS, 2, AttributeModifier.Operation.ADDITION);
+			addModifier(mob, Attributes.ATTACK_DAMAGE, WEAPONS, 2, AttributeModifier.Operation.ADD_VALUE);
 		}
 		long time = world.getDayTime();
 		long expires = temporary ? time + ticks
@@ -310,16 +310,16 @@ public final class Echoes {
 		// A pillar of pale light and strands winding in as the echo takes shape
 		Fx.pillar(world, at, 0.5f, 2.6f, 14, Shepherd.SPIRIT_RGB);
 		Fx.helix(world, mob, Math.max(0.6f, mob.getBbWidth()), mob.getBbHeight() + 0.4f, 2, true, 16, Shepherd.SPIRIT_RGB);
-		world.playSound(null, mob.blockPosition(), SoundEvents.SOUL_ESCAPE, SoundSource.PLAYERS, 1.5f, 0.7f);
+		world.playSound(null, mob.blockPosition(), SoundEvents.SOUL_ESCAPE.value(), SoundSource.PLAYERS, 1.5f, 0.7f);
 		world.playSound(null, mob.blockPosition(), SoundEvents.ALLAY_AMBIENT_WITHOUT_ITEM, SoundSource.PLAYERS, 0.6f, 0.5f);
 		return mob;
 	}
 
-	private static void addModifier(Mob mob, net.minecraft.world.entity.ai.attributes.Attribute attribute, UUID id, double amount,
+	private static void addModifier(Mob mob, net.minecraft.core.Holder<net.minecraft.world.entity.ai.attributes.Attribute> attribute, net.minecraft.resources.ResourceLocation id, double amount,
 			AttributeModifier.Operation operation) {
 		AttributeInstance instance = mob.getAttribute(attribute);
 		if (instance != null && instance.getModifier(id) == null) {
-			instance.addPermanentModifier(new AttributeModifier(id, "mages_legacy_echo", amount, operation));
+			instance.addPermanentModifier(new AttributeModifier(id, amount, operation));
 		}
 	}
 
@@ -344,7 +344,7 @@ public final class Echoes {
 		if (entity.level() instanceof ServerLevel world) {
 			world.sendParticles(ParticleTypes.SOUL, entity.getX(), entity.getY() + 1, entity.getZ(), 16, 0.3, 0.5, 0.3, 0.03);
 			world.sendParticles(SPIRIT, entity.getX(), entity.getY() + 1, entity.getZ(), 20, 0.3, 0.6, 0.3, 0);
-			world.playSound(null, entity.blockPosition(), SoundEvents.SOUL_ESCAPE, SoundSource.NEUTRAL, 1.0f, 1.2f);
+			world.playSound(null, entity.blockPosition(), SoundEvents.SOUL_ESCAPE.value(), SoundSource.NEUTRAL, 1.0f, 1.2f);
 		}
 		entity.discard();
 	}

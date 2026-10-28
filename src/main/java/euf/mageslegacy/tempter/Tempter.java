@@ -83,8 +83,8 @@ public final class Tempter {
 	private static final int AFTER_WINGS = 60;
 	/** A minute without a living soul near brings the longing. */
 	private static final int LONELY_AFTER = 1200;
-	private static final UUID FRAIL_HEALTH = UUID.fromString("2b6c3f1e-7d4a-4f0b-8e21-5a9c0d3e6f11");
-	private static final UUID NIGHT_SPEED = UUID.fromString("2b6c3f1e-7d4a-4f0b-8e21-5a9c0d3e6f12");
+	private static final net.minecraft.resources.ResourceLocation FRAIL_HEALTH = euf.mageslegacy.MagesLegacy.id("attribute/tempter/frail_health");
+	private static final net.minecraft.resources.ResourceLocation NIGHT_SPEED = euf.mageslegacy.MagesLegacy.id("attribute/tempter/night_speed");
 
 	/** A creature won over by a Tempter (infatuated, a thrall or asleep): for whom, until when. */
 	private record Spell(UUID tempter, long until) {}
@@ -204,7 +204,7 @@ public final class Tempter {
 		// Frail: two hearts short of a plain human
 		AttributeInstance health = player.getAttribute(Attributes.MAX_HEALTH);
 		if (health != null && health.getModifier(FRAIL_HEALTH) == null) {
-			health.addTransientModifier(new AttributeModifier(FRAIL_HEALTH, "tempter_frail", -4, AttributeModifier.Operation.ADDITION));
+			health.addTransientModifier(new AttributeModifier(FRAIL_HEALTH, -4, AttributeModifier.Operation.ADD_VALUE));
 			player.setHealth(Math.min(player.getHealth(), player.getMaxHealth()));
 		}
 		// Night Huntress: quicker under the moon
@@ -212,7 +212,7 @@ public final class Tempter {
 		boolean nightSpeed = data.has(Talents.WING_NIGHT) && night(world);
 		if (speed != null && nightSpeed != (speed.getModifier(NIGHT_SPEED) != null)) {
 			if (nightSpeed) {
-				speed.addTransientModifier(new AttributeModifier(NIGHT_SPEED, "tempter_night", 0.1, AttributeModifier.Operation.MULTIPLY_BASE));
+				speed.addTransientModifier(new AttributeModifier(NIGHT_SPEED, 0.1, AttributeModifier.Operation.ADD_MULTIPLIED_BASE));
 			} else {
 				speed.removeModifier(NIGHT_SPEED);
 			}
@@ -224,7 +224,7 @@ public final class Tempter {
 		}
 	}
 
-	private static void refresh(ServerPlayer player, MobEffect effect, int amplifier) {
+	private static void refresh(ServerPlayer player, net.minecraft.core.Holder<MobEffect> effect, int amplifier) {
 		MobEffectInstance current = player.getEffect(effect);
 		if (current == null || current.getDuration() <= 30) {
 			player.addEffect(new MobEffectInstance(effect, 60, amplifier, true, false, true));

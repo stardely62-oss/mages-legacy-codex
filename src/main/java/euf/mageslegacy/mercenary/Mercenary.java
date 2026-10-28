@@ -74,11 +74,11 @@ public final class Mercenary {
 	private static final int RANSOM_COOLDOWN = 24000;
 	public static final int RANSOM_TOKENS = 30;
 
-	private static final UUID HIDE_ARMOR = UUID.fromString("8a51c3e2-4b7d-4f19-a2c6-5e0d9b3f1a01");
-	private static final UUID VETERAN_ARMOR = UUID.fromString("8a51c3e2-4b7d-4f19-a2c6-5e0d9b3f1a02");
-	private static final UUID VETERAN_TOUGHNESS = UUID.fromString("8a51c3e2-4b7d-4f19-a2c6-5e0d9b3f1a03");
-	private static final UUID MARCH_SPEED = UUID.fromString("8a51c3e2-4b7d-4f19-a2c6-5e0d9b3f1a04");
-	private static final UUID IRON_KNOCKBACK = UUID.fromString("8a51c3e2-4b7d-4f19-a2c6-5e0d9b3f1a05");
+	private static final net.minecraft.resources.ResourceLocation HIDE_ARMOR = euf.mageslegacy.MagesLegacy.id("attribute/mercenary/hide_armor");
+	private static final net.minecraft.resources.ResourceLocation VETERAN_ARMOR = euf.mageslegacy.MagesLegacy.id("attribute/mercenary/veteran_armor");
+	private static final net.minecraft.resources.ResourceLocation VETERAN_TOUGHNESS = euf.mageslegacy.MagesLegacy.id("attribute/mercenary/veteran_toughness");
+	private static final net.minecraft.resources.ResourceLocation MARCH_SPEED = euf.mageslegacy.MagesLegacy.id("attribute/mercenary/march_speed");
+	private static final net.minecraft.resources.ResourceLocation IRON_KNOCKBACK = euf.mageslegacy.MagesLegacy.id("attribute/mercenary/iron_knockback");
 
 	/** Strike on Credit: blows left in the charge, and until when it holds. */
 	private record Strike(int blows, long until) {}
@@ -141,7 +141,7 @@ public final class Mercenary {
 		AttributeInstance speed = player.getAttribute(Attributes.MOVEMENT_SPEED);
 		if (speed != null && data.has(Talents.CRAFT_MARCH) != (speed.getModifier(MARCH_SPEED) != null)) {
 			if (data.has(Talents.CRAFT_MARCH)) {
-				speed.addTransientModifier(new AttributeModifier(MARCH_SPEED, "merc_march", 0.1, AttributeModifier.Operation.MULTIPLY_BASE));
+				speed.addTransientModifier(new AttributeModifier(MARCH_SPEED, 0.1, AttributeModifier.Operation.ADD_MULTIPLIED_BASE));
 			} else {
 				speed.removeModifier(MARCH_SPEED);
 			}
@@ -159,7 +159,7 @@ public final class Mercenary {
 		}
 	}
 
-	private static void refresh(ServerPlayer player, net.minecraft.world.effect.MobEffect effect, int amplifier) {
+	private static void refresh(ServerPlayer player, net.minecraft.core.Holder<net.minecraft.world.effect.MobEffect> effect, int amplifier) {
 		MobEffectInstance current = player.getEffect(effect);
 		if (current == null || current.getDuration() <= 30) {
 			player.addEffect(new MobEffectInstance(effect, 60, amplifier, true, false, true));
@@ -167,13 +167,13 @@ public final class Mercenary {
 	}
 
 	/** Adds or removes a talent's attribute bonus so it matches whether the talent is learnt. */
-	private static void modifier(ServerPlayer player, Attribute attribute, UUID id, String name, double amount, boolean want) {
+	private static void modifier(ServerPlayer player, net.minecraft.core.Holder<Attribute> attribute, net.minecraft.resources.ResourceLocation id, String name, double amount, boolean want) {
 		AttributeInstance instance = player.getAttribute(attribute);
 		if (instance == null || want == (instance.getModifier(id) != null)) {
 			return;
 		}
 		if (want) {
-			instance.addTransientModifier(new AttributeModifier(id, name, amount, AttributeModifier.Operation.ADDITION));
+			instance.addTransientModifier(new AttributeModifier(id, amount, AttributeModifier.Operation.ADD_VALUE));
 		} else {
 			instance.removeModifier(id);
 		}
@@ -259,7 +259,7 @@ public final class Mercenary {
 		Fx.coins(world, player.position().add(0, 1.2, 0), 4, 0.6f, 24);
 		Fx.aura(world, player, STRIKE_WINDOW, GOLD_RGB, Fx.MOTES);
 		Fx.pulse(player, 1, 14, 0xB01226);
-		world.playSound(null, player.blockPosition(), SoundEvents.ARMOR_EQUIP_CHAIN, SoundSource.PLAYERS, 1.0f, 0.7f);
+		world.playSound(null, player.blockPosition(), SoundEvents.ARMOR_EQUIP_CHAIN.value(), SoundSource.PLAYERS, 1.0f, 0.7f);
 		world.playSound(null, player.blockPosition(), SoundEvents.AMETHYST_BLOCK_CHIME, SoundSource.PLAYERS, 1.0f, 0.6f);
 		return AbilityResult.OK;
 	}
@@ -286,13 +286,13 @@ public final class Mercenary {
 		cooldown(player, data, 1, EXCHANGE_COOLDOWN);
 		List<MobEffectInstance> mine = new ArrayList<>();
 		for (MobEffectInstance e : player.getActiveEffects()) {
-			if (!e.getEffect().isBeneficial() && !e.isAmbient()) {
+			if (!e.getEffect().value().isBeneficial() && !e.isAmbient()) {
 				mine.add(e);
 			}
 		}
 		List<MobEffectInstance> theirs = new ArrayList<>();
 		for (MobEffectInstance e : target.getActiveEffects()) {
-			if (e.getEffect().isBeneficial()) {
+			if (e.getEffect().value().isBeneficial()) {
 				theirs.add(e);
 			}
 		}
@@ -339,7 +339,7 @@ public final class Mercenary {
 			for (EquipmentSlot slot : worn) {
 				ItemStack stack = player.getItemBySlot(slot);
 				if (stack.isDamageableItem()) {
-					stack.hurtAndBreak(Math.max(1, Math.round(stack.getMaxDamage() * PLEDGE_WEAR)), player, p -> p.broadcastBreakEvent(slot));
+					stack.hurtAndBreak(Math.max(1, Math.round(stack.getMaxDamage() * PLEDGE_WEAR)), player, slot);
 				}
 			}
 		}
@@ -351,7 +351,7 @@ public final class Mercenary {
 		Fx.seal(world, player, 1.1f, ticks, GOLD_RGB);
 		Fx.shake(player, 1.0f, 6);
 		world.playSound(null, player.blockPosition(), SoundEvents.ANVIL_PLACE, SoundSource.PLAYERS, 0.5f, 1.4f);
-		world.playSound(null, player.blockPosition(), SoundEvents.ARMOR_EQUIP_NETHERITE, SoundSource.PLAYERS, 1.0f, 0.8f);
+		world.playSound(null, player.blockPosition(), SoundEvents.ARMOR_EQUIP_NETHERITE.value(), SoundSource.PLAYERS, 1.0f, 0.8f);
 		return AbilityResult.OK;
 	}
 

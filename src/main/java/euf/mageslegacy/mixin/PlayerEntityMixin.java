@@ -35,20 +35,20 @@ public abstract class PlayerEntityMixin {
 	}
 
 	@Inject(method = "eat", at = @At("HEAD"))
-	private void mages_legacy$beforeEat(Level world, ItemStack stack, CallbackInfoReturnable<ItemStack> cir) {
+	private void mages_legacy$beforeEat(Level world, ItemStack stack, FoodProperties properties, CallbackInfoReturnable<ItemStack> cir) {
 		// Remember the item now: eating shrinks the stack, and a stew turns into a bowl
-		mages_legacy$eating = stack.isEdible() ? stack.getItem() : null;
+		mages_legacy$eating = properties != null ? stack.getItem() : null;
 	}
 
 	@Inject(method = "eat", at = @At("RETURN"))
-	private void mages_legacy$afterEat(Level world, ItemStack stack, CallbackInfoReturnable<ItemStack> cir) {
+	private void mages_legacy$afterEat(Level world, ItemStack stack, FoodProperties properties, CallbackInfoReturnable<ItemStack> cir) {
 		Item item = mages_legacy$eating;
 		mages_legacy$eating = null;
 		if (item == null || !((Object) this instanceof ServerPlayer player)) {
 			return;
 		}
 		RaceData data = RaceState.of(player);
-		FoodProperties food = item.getFoodProperties();
+		FoodProperties food = properties;
 		if (data != null && data.race == Race.MYCELID && food != null) {
 			Mycelid.afterEating(player, data, item, food);
 		}

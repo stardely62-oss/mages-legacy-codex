@@ -42,8 +42,8 @@ public record BeastKind(String id, EntityType<?> type, Taming taming, int steps,
 	}
 
 	public static final List<BeastKind> ALL = List.of(
-			new BeastKind("wolf", EntityType.WOLF, Taming.FEED_BY_FIRE, 4, s -> s.isEdible() && s.getItem().getFoodProperties().isMeat(), 2, Items.WOLF_SPAWN_EGG,
-					s -> s.isEdible() && s.getItem().getFoodProperties().isMeat()),
+			new BeastKind("wolf", EntityType.WOLF, Taming.FEED_BY_FIRE, 4, s -> s.is(net.minecraft.tags.ItemTags.MEAT), 2, Items.WOLF_SPAWN_EGG,
+					s -> s.is(net.minecraft.tags.ItemTags.MEAT)),
 			new BeastKind("cat", EntityType.CAT, Taming.PATIENCE, 20, s -> s.is(Items.COD) || s.is(Items.SALMON), 1, Items.CAT_SPAWN_EGG,
 					s -> s.is(Items.COD) || s.is(Items.SALMON)),
 			new BeastKind("fox", EntityType.FOX, Taming.ASLEEP, 1, s -> s.is(Items.GLOW_BERRIES), 1, Items.FOX_SPAWN_EGG,

@@ -357,8 +357,8 @@ public final class FxRenderer {
 		if (d < 1.0) {
 			alpha *= (float) Mth.clamp((d - 0.35) / 0.65, 0, 1);
 		}
-		vc.vertex(m, (float) x, (float) y, (float) z).color((rgb >> 16) & 0xFF, (rgb >> 8) & 0xFF, rgb & 0xFF,
-				(int) (Mth.clamp(alpha, 0, 1) * 255)).endVertex();
+		vc.addVertex(m, (float) x, (float) y, (float) z).setColor((rgb >> 16) & 0xFF, (rgb >> 8) & 0xFF, rgb & 0xFF,
+				(int) (Mth.clamp(alpha, 0, 1) * 255));
 	}
 
 	/**

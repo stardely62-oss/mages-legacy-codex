@@ -359,7 +359,7 @@ public final class Frozen {
 		}
 	}
 
-	private static void refresh(ServerPlayer player, MobEffect effect, int amplifier, int duration, int below) {
+	private static void refresh(ServerPlayer player, net.minecraft.core.Holder<MobEffect> effect, int amplifier, int duration, int below) {
 		MobEffectInstance current = player.getEffect(effect);
 		if (current == null || current.getAmplifier() < amplifier || current.getDuration() <= below) {
 			player.addEffect(new MobEffectInstance(effect, duration, amplifier, true, false, true));
@@ -382,7 +382,7 @@ public final class Frozen {
 	 */
 	public static MobEffectInstance shorten(LivingEntity entity, MobEffectInstance effect) {
 		if (!(entity instanceof ServerPlayer player) || effect.isAmbient() || effect.isInfiniteDuration() || effect.getDuration() <= 60
-				|| !effect.getEffect().isBeneficial() || !is(player)) {
+				|| !effect.getEffect().value().isBeneficial() || !is(player)) {
 			return effect;
 		}
 		return new MobEffectInstance(effect.getEffect(), (int) (effect.getDuration() * 0.7f), effect.getAmplifier(), false,
@@ -714,7 +714,7 @@ public final class Frozen {
 			STRIKE.put(player.getUUID(), now(player.getServer()) + STRIKE_TICKS);
 		}
 		if (data.has(Talents.LOOP_CLEANSE)) {
-			player.getActiveEffects().stream().filter(e -> !e.getEffect().isBeneficial()).map(MobEffectInstance::getEffect).toList()
+			player.getActiveEffects().stream().filter(e -> !e.getEffect().value().isBeneficial()).map(MobEffectInstance::getEffect).toList()
 					.forEach(player::removeEffect);
 		}
 		if (data.has(Talents.LOOP_HASTE)) {

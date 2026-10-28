@@ -204,7 +204,7 @@ public final class RacePackets {
 		if (!Server.canSend(player, OPEN_CHOICE)) {
 			return false;
 		}
-		Server.send(player, OPEN_CHOICE, PacketByteBufs.empty());
+		Server.send(player, OPEN_CHOICE, Network.create());
 		return true;
 	}
 
