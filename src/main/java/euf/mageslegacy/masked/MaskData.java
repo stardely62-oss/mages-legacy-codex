@@ -2,9 +2,9 @@ package euf.mageslegacy.masked;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
-import net.minecraft.nbt.NbtCompound;
-import net.minecraft.nbt.NbtElement;
-import net.minecraft.nbt.NbtList;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.ListTag;
+import net.minecraft.nbt.Tag;
 
 /** A Masked's gallery: the faces taken, each with how fresh it still is (100 to 0), and which one is worn. */
 public class MaskData {
@@ -18,12 +18,12 @@ public class MaskData {
 		worn = null;
 	}
 
-	public NbtCompound toNbt() {
-		NbtCompound nbt = new NbtCompound();
+	public CompoundTag toNbt() {
+		CompoundTag nbt = new CompoundTag();
 		// A list, not a compound: the order faces were taken is the order Z goes through them
-		NbtList faces = new NbtList();
+		ListTag faces = new ListTag();
 		gallery.forEach((face, fresh) -> {
-			NbtCompound entry = new NbtCompound();
+			CompoundTag entry = new CompoundTag();
 			entry.putString("id", face.id);
 			entry.putFloat("fresh", fresh);
 			faces.add(entry);
@@ -35,10 +35,10 @@ public class MaskData {
 		return nbt;
 	}
 
-	public void readNbt(NbtCompound nbt) {
+	public void readNbt(CompoundTag nbt) {
 		clear();
-		for (NbtElement e : nbt.getList("gallery", NbtElement.COMPOUND_TYPE)) {
-			NbtCompound entry = (NbtCompound) e;
+		for (Tag e : nbt.getList("gallery", Tag.TAG_COMPOUND)) {
+			CompoundTag entry = (CompoundTag) e;
 			Face.byId(entry.getString("id")).ifPresent(face -> gallery.put(face, entry.getFloat("fresh")));
 		}
 		worn = Face.byId(nbt.getString("worn")).filter(gallery::containsKey).orElse(null);

@@ -38,34 +38,34 @@ import java.util.function.Function;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.loader.api.FabricLoader;
-import net.minecraft.block.Blocks;
-import net.minecraft.block.entity.AbstractFurnaceBlockEntity;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.option.KeyBinding;
-import net.minecraft.client.option.Perspective;
-import net.minecraft.client.util.ScreenshotRecorder;
-import net.minecraft.entity.EntityType;
-import net.minecraft.entity.EquipmentSlot;
-import net.minecraft.entity.effect.StatusEffects;
-import net.minecraft.entity.mob.MobEntity;
-import net.minecraft.entity.mob.SpiderEntity;
-import net.minecraft.entity.mob.ZombieEntity;
-import net.minecraft.entity.passive.BatEntity;
-import net.minecraft.entity.passive.WolfEntity;
-import net.minecraft.item.Item;
-import net.minecraft.item.ItemStack;
-import net.minecraft.item.Items;
+import net.minecraft.client.CameraType;
+import net.minecraft.client.KeyMapping;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.Screenshot;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.server.MinecraftServer;
-import net.minecraft.server.network.ServerPlayerEntity;
-import net.minecraft.server.world.ServerWorld;
-import net.minecraft.util.Hand;
-import net.minecraft.util.hit.BlockHitResult;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.Box;
-import net.minecraft.util.math.Direction;
-import net.minecraft.util.math.Vec3d;
-import net.minecraft.world.Heightmap;
-import net.minecraft.world.World;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.InteractionHand;
+import net.minecraft.world.effect.MobEffects;
+import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.EquipmentSlot;
+import net.minecraft.world.entity.Mob;
+import net.minecraft.world.entity.ambient.Bat;
+import net.minecraft.world.entity.animal.Wolf;
+import net.minecraft.world.entity.monster.Spider;
+import net.minecraft.world.entity.monster.Zombie;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.entity.AbstractFurnaceBlockEntity;
+import net.minecraft.world.level.levelgen.Heightmap;
+import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.BlockHitResult;
+import net.minecraft.world.phys.Vec3;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -78,7 +78,7 @@ public class HarnessClient implements ClientModInitializer {
 	private static final Logger LOGGER = LoggerFactory.getLogger("mages_legacy-harness");
 
 	/** A step of the scenario: its action, then a wait; {@code until}, if given, holds the step back until it's true (or 100 ticks). */
-	private record Step(int waitAfter, boolean needsTerrain, Consumer<MinecraftClient> action, java.util.function.Predicate<MinecraftClient> until) {}
+	private record Step(int waitAfter, boolean needsTerrain, Consumer<Minecraft> action, java.util.function.Predicate<Minecraft> until) {}
 
 	private final Deque<Step> steps = new ArrayDeque<>();
 	private final List<String> results = new ArrayList<>();
@@ -87,7 +87,7 @@ public class HarnessClient implements ClientModInitializer {
 
 	private volatile BlockPos arena;
 	private volatile UUID zombie;
-	private Vec3d beforeJump;
+	private Vec3 beforeJump;
 
 	@Override
 	public void onInitializeClient() {
@@ -96,8 +96,8 @@ public class HarnessClient implements ClientModInitializer {
 		}
 		// A new player: the legend opens by itself
 		step(40, true, c -> {
-			check("lore_screen_on_join", c.currentScreen instanceof LoreScreen);
-			if (c.currentScreen instanceof LoreScreen lore) {
+			check("lore_screen_on_join", c.screen instanceof LoreScreen);
+			if (c.screen instanceof LoreScreen lore) {
 				lore.revealAll();
 			}
 		});
@@ -106,9 +106,9 @@ public class HarnessClient implements ClientModInitializer {
 			check("journeymap_loaded", FabricLoader.getInstance().isModLoaded("journeymap"));
 			check("old_key_settled", MagesLegacyClient.ABILITY_KEYS[2].isDefault());
 			StringBuilder clashes = new StringBuilder();
-			for (KeyBinding ours : MagesLegacyClient.ourKeys()) {
-				for (KeyBinding other : MagesLegacyClient.clashes(c, ours)) {
-					clashes.append(ours.getTranslationKey()).append(" = ").append(other.getTranslationKey()).append("; ");
+			for (KeyMapping ours : MagesLegacyClient.ourKeys()) {
+				for (KeyMapping other : MagesLegacyClient.clashes(c, ours)) {
+					clashes.append(ours.getName()).append(" = ").append(other.getName()).append("; ");
 				}
 			}
 			LOGGER.info("[harness] key clashes: {}", clashes.length() == 0 ? "none" : clashes);
@@ -116,50 +116,50 @@ public class HarnessClient implements ClientModInitializer {
 		});
 		step(5, false, c -> {
 			screenshot(c, "lore");
-			if (c.currentScreen instanceof LoreScreen lore) {
+			if (c.screen instanceof LoreScreen lore) {
 				lore.showPage(2);
 			}
 		});
 		step(5, false, c -> {
 			screenshot(c, "lore_division");
-			if (c.currentScreen instanceof LoreScreen lore) {
+			if (c.screen instanceof LoreScreen lore) {
 				lore.showPage(4);
 			}
 		});
 		step(5, false, c -> screenshot(c, "lore_last"));
 		step(20, false, c -> {
-			if (c.currentScreen instanceof LoreScreen lore) {
+			if (c.screen instanceof LoreScreen lore) {
 				lore.next();
 			}
 		});
 		step(20, false, c -> {
-			check("choice_screen", c.currentScreen instanceof RaceSelectScreen);
+			check("choice_screen", c.screen instanceof RaceSelectScreen);
 			screenshot(c, "choose_mycelid");
-			if (c.currentScreen instanceof RaceSelectScreen screen) {
+			if (c.screen instanceof RaceSelectScreen screen) {
 				screen.select(Race.VOIDBORN);
 			}
 		});
 		step(10, false, c -> {
 			screenshot(c, "choose_voidborn");
-			if (c.currentScreen instanceof RaceSelectScreen screen) {
+			if (c.screen instanceof RaceSelectScreen screen) {
 				screen.select(Race.MERCENARY);
 			}
 		});
 		step(10, false, c -> {
 			screenshot(c, "choose_mercenary");
-			if (c.currentScreen instanceof RaceSelectScreen screen) {
+			if (c.screen instanceof RaceSelectScreen screen) {
 				screen.select(Race.TEMPTER);
 			}
 		});
 		step(10, false, c -> {
 			screenshot(c, "choose_tempter");
-			if (c.currentScreen instanceof RaceSelectScreen screen) {
+			if (c.screen instanceof RaceSelectScreen screen) {
 				screen.select(Race.MASKED);
 			}
 		});
 		step(10, false, c -> screenshot(c, "choose_masked"));
 		step(20, false, c -> {
-			if (c.currentScreen instanceof RaceSelectScreen screen) {
+			if (c.screen instanceof RaceSelectScreen screen) {
 				screen.select(Race.MYCELID);
 				screen.choose();
 			}
@@ -167,68 +167,68 @@ public class HarnessClient implements ClientModInitializer {
 		step(20, false, c -> {
 			check("chosen_on_server", serverRace(c) == Race.MYCELID);
 			check("chosen_on_client", ClientRaceState.race == Race.MYCELID);
-			check("choice_screen_closed", c.currentScreen == null);
+			check("choice_screen_closed", c.screen == null);
 			commands(c, "gamerule sendCommandFeedback false", "gamerule doDaylightCycle false", "gamerule doWeatherCycle false",
 					"gamerule doMobSpawning false", "time set 1000", "weather clear", "gamemode survival @a",
 					"effect give @a minecraft:resistance 600 4 true", "effect give @a minecraft:saturation 600 0 true",
 					"race xp @a 20000", "race resource @a 100", "clear @a",
 					"give @a minecraft:red_mushroom 8", "give @a minecraft:brown_mushroom 8");
 			onServer(c, s -> {
-				arena = prepareArena(s.getOverworld());
+				arena = prepareArena(s.overworld());
 				return null;
 			});
 		});
-		step(40, true, c -> tp(c, Vec3d.ofBottomCenter(arena).add(-6, 0, 0), Vec3d.ofBottomCenter(arena).add(4, 0, 0)));
+		step(40, true, c -> tp(c, Vec3.atBottomCenterOf(arena).add(-6, 0, 0), Vec3.atBottomCenterOf(arena).add(4, 0, 0)));
 		step(20, true, c -> screenshot(c, "hud"));
 
 		// The talent tree: learn the jump chain with a click
 		step(10, false, c -> c.setScreen(new TalentScreen()));
 		step(20, false, c -> {
 			check("tree_has_points", ClientRaceState.freePoints > 0);
-			if (c.currentScreen instanceof TalentScreen tree) {
+			if (c.screen instanceof TalentScreen tree) {
 				check("tree_click_learns", tree.click(Talents.NET_CHAIN));
 			}
 		});
 		step(20, false, c -> {
-			check("talent_on_server", onServer(c, s -> RaceState.get(s).data(c.player.getUuid()).has(Talents.NET_CHAIN)));
+			check("talent_on_server", onServer(c, s -> RaceState.get(s).data(c.player.getUUID()).has(Talents.NET_CHAIN)));
 			screenshot(c, "talents");
-			if (c.currentScreen instanceof TalentScreen tree) {
+			if (c.screen instanceof TalentScreen tree) {
 				tree.toggleGuide();
 			}
 		});
 		// A short screen (GUI scale 4): the guide and the tree no longer fit and must scroll
 		step(5, false, c -> {
 			screenshot(c, "talents_guide");
-			c.options.getGuiScale().setValue(4);
-			c.onResolutionChanged();
+			c.options.guiScale().set(4);
+			c.resizeDisplay();
 		});
 		step(5, false, c -> {
-			if (c.currentScreen instanceof TalentScreen tree) {
-				tree.mouseScrolled(c.currentScreen.width / 2.0, c.currentScreen.height / 2.0, -3);
+			if (c.screen instanceof TalentScreen tree) {
+				tree.mouseScrolled(c.screen.width / 2.0, c.screen.height / 2.0, -3);
 			}
 		});
 		step(5, false, c -> {
 			screenshot(c, "talents_guide_scrolled");
-			if (c.currentScreen instanceof TalentScreen tree) {
+			if (c.screen instanceof TalentScreen tree) {
 				tree.toggleGuide();
-				tree.mouseScrolled(c.currentScreen.width / 2.0, c.currentScreen.height / 2.0, -10);
+				tree.mouseScrolled(c.screen.width / 2.0, c.screen.height / 2.0, -10);
 			}
 		});
 		step(5, false, c -> {
 			screenshot(c, "talents_scrolled");
-			c.options.getGuiScale().setValue(0);
-			c.onResolutionChanged();
+			c.options.guiScale().set(0);
+			c.resizeDisplay();
 			c.setScreen(null);
 		});
 
 		// Spore jump towards the arena centre
 		step(10, false, c -> {
-			beforeJump = c.player.getPos();
+			beforeJump = c.player.position();
 			MagesLegacyClient.useAbility(0);
 		});
 		step(4, false, c -> screenshot(c, "spore_jump"));
 		step(20, false, c -> {
-			double moved = c.player.getPos().subtract(beforeJump).horizontalLength();
+			double moved = c.player.position().subtract(beforeJump).horizontalDistance();
 			check("spore_jump_moved", moved > 2);
 			check("jump_chain_open", ClientRaceState.chainLeft == 2);
 			LOGGER.info("[harness] jumped {} blocks", String.format(Locale.ROOT, "%.1f", moved));
@@ -238,63 +238,63 @@ public class HarnessClient implements ClientModInitializer {
 		step(10, false, c -> {
 			commands(c, "race resource @a 100");
 			onServer(c, s -> {
-				ServerWorld world = s.getOverworld();
-				ZombieEntity mob = EntityType.ZOMBIE.create(world);
-				mob.refreshPositionAndAngles(arena.getX() + 2.5, arena.getY(), arena.getZ() + 0.5, 90, 0);
-				mob.setAiDisabled(true);
-				mob.setPersistent();
+				ServerLevel world = s.overworld();
+				Zombie mob = EntityType.ZOMBIE.create(world);
+				mob.moveTo(arena.getX() + 2.5, arena.getY(), arena.getZ() + 0.5, 90, 0);
+				mob.setNoAi(true);
+				mob.setPersistenceRequired();
 				// A helmet keeps it from burning in the morning sun
-				mob.equipStack(EquipmentSlot.HEAD, new ItemStack(Items.LEATHER_HELMET));
-				world.spawnEntity(mob);
-				zombie = mob.getUuid();
+				mob.setItemSlot(EquipmentSlot.HEAD, new ItemStack(Items.LEATHER_HELMET));
+				world.addFreshEntity(mob);
+				zombie = mob.getUUID();
 				return null;
 			});
-			tp(c, Vec3d.ofBottomCenter(arena).add(-1, 0, 0), Vec3d.ofBottomCenter(arena).add(2.5, 1, 0));
+			tp(c, Vec3.atBottomCenterOf(arena).add(-1, 0, 0), Vec3.atBottomCenterOf(arena).add(2.5, 1, 0));
 		});
 		step(30, false, c -> {
 			MagesLegacyClient.useAbility(1);
 			// From behind the shoulder, so the whole cloud is in the frame
-			c.options.setPerspective(Perspective.THIRD_PERSON_BACK);
+			c.options.setCameraType(CameraType.THIRD_PERSON_BACK);
 		});
 		step(30, false, c -> {
 			screenshot(c, "spore_cloud");
-			c.options.setPerspective(Perspective.FIRST_PERSON);
-			String effects = onServer(c, s -> s.getOverworld().getEntity(zombie) instanceof ZombieEntity z
-					? z.getStatusEffects().toString() + " hp " + z.getHealth() : "no zombie");
+			c.options.setCameraType(CameraType.FIRST_PERSON);
+			String effects = onServer(c, s -> s.overworld().getEntity(zombie) instanceof Zombie z
+					? z.getActiveEffects().toString() + " hp " + z.getHealth() : "no zombie");
 			LOGGER.info("[harness] zombie in the cloud: {}", effects);
-			check("cloud_chokes_zombie", onServer(c, s -> s.getOverworld().getEntity(zombie) instanceof ZombieEntity z
-					&& z.hasStatusEffect(StatusEffects.BLINDNESS)
-					&& (z.hasStatusEffect(StatusEffects.WITHER) || z.hasStatusEffect(StatusEffects.POISON))));
+			check("cloud_chokes_zombie", onServer(c, s -> s.overworld().getEntity(zombie) instanceof Zombie z
+					&& z.hasEffect(MobEffects.BLINDNESS)
+					&& (z.hasEffect(MobEffects.WITHER) || z.hasEffect(MobEffects.POISON))));
 		});
 
 		// Eat a raw mushroom from the hand
 		step(10, false, c -> {
 			selectItem(c, Items.RED_MUSHROOM);
-			c.player.setPitch(-60);
-			c.interactionManager.interactItem(c.player, Hand.MAIN_HAND);
+			c.player.setXRot(-60);
+			c.gameMode.useItem(c.player, InteractionHand.MAIN_HAND);
 		});
 		step(10, false, c -> check("mushroom_taste", onServer(c, s ->
-				s.getPlayerManager().getPlayer(c.player.getUuid()).hasStatusEffect(StatusEffects.STRENGTH))));
+				s.getPlayerList().getPlayer(c.player.getUUID()).hasEffect(MobEffects.DAMAGE_BOOST))));
 
 		// H: the Mycelium Carpet, seen from above the shoulder; then Alt with the Great Bloom crown
 		step(10, false, c -> {
 			resetCooldowns(c);
-			UUID me = c.player.getUuid();
+			UUID me = c.player.getUUID();
 			onServer(c, s -> {
-				ServerPlayerEntity player = s.getPlayerManager().getPlayer(me);
+				ServerPlayer player = s.getPlayerList().getPlayer(me);
 				RaceData data = RaceState.get(s).data(me);
 				data.talents.add(Talents.SWARM_BLOOM);
 				data.addResource(100);
 				RacePackets.sync(player, data);
 				return null;
 			});
-			tp(c, Vec3d.ofBottomCenter(arena).add(-1, 0, 0), Vec3d.ofBottomCenter(arena).add(2.5, 0, 0));
+			tp(c, Vec3.atBottomCenterOf(arena).add(-1, 0, 0), Vec3.atBottomCenterOf(arena).add(2.5, 0, 0));
 		});
 		step(10, false, c -> MagesLegacyClient.useAbility(3));
 		step(25, false, c -> {
-			check("carpet_is_mycelium", onServer(c, s -> Mycelid.onMycelium(s.getPlayerManager().getPlayer(c.player.getUuid()))));
-			c.options.setPerspective(Perspective.THIRD_PERSON_BACK);
-			c.player.setPitch(45);
+			check("carpet_is_mycelium", onServer(c, s -> Mycelid.onMycelium(s.getPlayerList().getPlayer(c.player.getUUID()))));
+			c.options.setCameraType(CameraType.THIRD_PERSON_BACK);
+			c.player.setXRot(45);
 		});
 		step(5, false, c -> screenshot(c, "mycelium_carpet"));
 		step(10, false, c -> {
@@ -303,44 +303,44 @@ public class HarnessClient implements ClientModInitializer {
 		});
 		step(12, false, c -> {
 			screenshot(c, "great_bloom");
-			c.options.setPerspective(Perspective.FIRST_PERSON);
-			check("bloom_infects", onServer(c, s -> s.getOverworld().getEntity(zombie) instanceof ZombieEntity z
-					&& z.hasStatusEffect(StatusEffects.GLOWING)));
+			c.options.setCameraType(CameraType.FIRST_PERSON);
+			check("bloom_infects", onServer(c, s -> s.overworld().getEntity(zombie) instanceof Zombie z
+					&& z.hasEffect(MobEffects.GLOWING)));
 		});
 
 		// Mycelium nodes open after the Nether: grow two and travel between them
 		step(10, false, c -> {
 			commands(c, "advancement grant @a only minecraft:story/enter_the_nether", "race resource @a 100");
-			tp(c, Vec3d.ofBottomCenter(arena).add(-7, 0, 2), Vec3d.ofBottomCenter(arena).add(-7, -1, 4));
+			tp(c, Vec3.atBottomCenterOf(arena).add(-7, 0, 2), Vec3.atBottomCenterOf(arena).add(-7, -1, 4));
 		});
 		step(20, false, c -> MagesLegacyClient.useAbility(2));
 		step(20, false, c -> {
 			commands(c, "race resource @a 100");
 			resetCooldowns(c);
-			tp(c, Vec3d.ofBottomCenter(arena).add(7, 0, -2), Vec3d.ofBottomCenter(arena).add(7, -1, -4));
+			tp(c, Vec3.atBottomCenterOf(arena).add(7, 0, -2), Vec3.atBottomCenterOf(arena).add(7, -1, -4));
 		});
 		step(20, false, c -> MagesLegacyClient.useAbility(2));
 		step(20, false, c -> {
-			check("two_nodes", onServer(c, s -> RaceState.get(s).nodes(c.player.getUuid()).size() == 2));
-			tp(c, Vec3d.ofBottomCenter(arena).add(5, 0, -5.5), Vec3d.ofBottomCenter(arena).add(7, 0.3, -3));
+			check("two_nodes", onServer(c, s -> RaceState.get(s).nodes(c.player.getUUID()).size() == 2));
+			tp(c, Vec3.atBottomCenterOf(arena).add(5, 0, -5.5), Vec3.atBottomCenterOf(arena).add(7, 0.3, -3));
 		});
 		step(30, true, c -> screenshot(c, "node"));
 		step(10, false, c -> {
-			BlockPos node = arena.add(7, 0, -3);
-			BlockHitResult hit = new BlockHitResult(Vec3d.ofCenter(node), Direction.UP, node, false);
-			c.interactionManager.interactBlock(c.player, Hand.MAIN_HAND, hit);
+			BlockPos node = arena.offset(7, 0, -3);
+			BlockHitResult hit = new BlockHitResult(Vec3.atCenterOf(node), Direction.UP, node, false);
+			c.gameMode.useItemOn(c.player, InteractionHand.MAIN_HAND, hit);
 		});
 		step(20, false, c -> {
-			check("node_travel", c.player.getBlockPos().isWithinDistance(arena.add(-7, 1, 3), 2));
+			check("node_travel", c.player.blockPosition().closerThan(arena.offset(-7, 1, 3), 2));
 			screenshot(c, "node_arrived");
 		});
 
 		// ---- Shepherds: switch race, learn echoes, the bestiary, a real Call, a bond, the Rally ----
 		step(10, false, c -> {
 			commands(c, "race set @a shepherd", "race xp @a 20000", "race resource @a 100", "kill @e[type=!player]");
-			UUID me = c.player.getUuid();
+			UUID me = c.player.getUUID();
 			onServer(c, s -> {
-				ServerPlayerEntity player = s.getPlayerManager().getPlayer(me);
+				ServerPlayer player = s.getPlayerList().getPlayer(me);
 				RaceData data = RaceState.get(s).data(me);
 				for (EntityType<?> type : List.of(EntityType.ZOMBIE, EntityType.SKELETON, EntityType.SPIDER)) {
 					EchoType echo = EchoType.of(type).orElseThrow();
@@ -363,69 +363,69 @@ public class HarnessClient implements ClientModInitializer {
 		step(20, false, c -> screenshot(c, "bestiary"));
 		step(10, false, c -> {
 			c.setScreen(null);
-			tp(c, Vec3d.ofBottomCenter(arena).add(-6, 0, 0), Vec3d.ofBottomCenter(arena).add(-2, 0, 0));
+			tp(c, Vec3.atBottomCenterOf(arena).add(-6, 0, 0), Vec3.atBottomCenterOf(arena).add(-2, 0, 0));
 		});
-		step(10, false, c -> KeyBinding.onKeyPressed(MagesLegacyClient.ABILITY_KEYS[0].getDefaultKey()));
+		step(10, false, c -> KeyMapping.click(MagesLegacyClient.ABILITY_KEYS[0].getDefaultKey()));
 		step(30, false, c -> {
 			check("echo_called", ClientRaceState.extra.getInt("echoes") == 1);
 			MagesLegacyClient.editSquad(0, "minecraft:skeleton", 1);
 			resetCooldowns(c);
 		});
-		step(10, false, c -> KeyBinding.onKeyPressed(MagesLegacyClient.ABILITY_KEYS[0].getDefaultKey()));
+		step(10, false, c -> KeyMapping.click(MagesLegacyClient.ABILITY_KEYS[0].getDefaultKey()));
 		step(30, false, c -> {
 			check("two_echoes", ClientRaceState.extra.getInt("echoes") == 2 && ClientRaceState.extra.getInt("capUsed") == 3);
-			c.options.hudHidden = true;
-			tp(c, Vec3d.ofBottomCenter(arena).add(-8, 0.5, 3), Vec3d.ofBottomCenter(arena).add(-3, 1, 0));
+			c.options.hideGui = true;
+			tp(c, Vec3.atBottomCenterOf(arena).add(-8, 0.5, 3), Vec3.atBottomCenterOf(arena).add(-3, 1, 0));
 		});
 		step(20, true, c -> screenshot(c, "echoes"));
 		// Sneak + Call sends the echoes back; one Call then brings the whole squad at once
-		step(5, false, c -> c.options.sneakKey.setPressed(true));
-		step(5, false, c -> KeyBinding.onKeyPressed(MagesLegacyClient.ABILITY_KEYS[0].getDefaultKey()));
+		step(5, false, c -> c.options.keyShift.setDown(true));
+		step(5, false, c -> KeyMapping.click(MagesLegacyClient.ABILITY_KEYS[0].getDefaultKey()));
 		step(20, false, c -> {
-			c.options.sneakKey.setPressed(false);
+			c.options.keyShift.setDown(false);
 			check("echoes_dismissed", ClientRaceState.extra.getInt("echoes") == 0 && ClientRaceState.extra.getInt("capUsed") == 0);
 			commands(c, "race resource @a 100");
 			resetCooldowns(c);
 		});
-		step(10, false, c -> KeyBinding.onKeyPressed(MagesLegacyClient.ABILITY_KEYS[0].getDefaultKey()));
+		step(10, false, c -> KeyMapping.click(MagesLegacyClient.ABILITY_KEYS[0].getDefaultKey()));
 		step(20, false, c -> {
 			check("squad_at_once", ClientRaceState.extra.getInt("echoes") == 2);
 			c.setScreen(new BestiaryScreen());
 		});
 		step(20, false, c -> screenshot(c, "bestiary_squad"));
 		step(5, false, c -> c.setScreen(null));
-		step(5, false, c -> c.options.sneakKey.setPressed(true));
-		step(5, false, c -> KeyBinding.onKeyPressed(MagesLegacyClient.ABILITY_KEYS[0].getDefaultKey()));
-		step(20, false, c -> c.options.sneakKey.setPressed(false));
+		step(5, false, c -> c.options.keyShift.setDown(true));
+		step(5, false, c -> KeyMapping.click(MagesLegacyClient.ABILITY_KEYS[0].getDefaultKey()));
+		step(20, false, c -> c.options.keyShift.setDown(false));
 
 		// A wolf, the Song (its own key, H, on the wolf in sight), three feedings, the last by a campfire
 		step(10, false, c -> {
-			c.options.hudHidden = false;
+			c.options.hideGui = false;
 			commands(c, "race resource @a 100", "clear @a", "give @a minecraft:beef 8");
 			onServer(c, s -> {
-				ServerWorld world = s.getOverworld();
-				WolfEntity wolf = EntityType.WOLF.create(world);
+				ServerLevel world = s.overworld();
+				Wolf wolf = EntityType.WOLF.create(world);
 				// Where the camera below looks: the centre of block (3, 0, 2) off the arena
-				wolf.refreshPositionAndAngles(arena.getX() + 4.0, arena.getY(), arena.getZ() + 3.0, 0, 0);
-				wolf.setAiDisabled(true);
-				world.spawnEntity(wolf);
-				world.setBlockState(arena.add(5, 0, 2), Blocks.CAMPFIRE.getDefaultState());
+				wolf.moveTo(arena.getX() + 4.0, arena.getY(), arena.getZ() + 3.0, 0, 0);
+				wolf.setNoAi(true);
+				world.addFreshEntity(wolf);
+				world.setBlockAndUpdate(arena.offset(5, 0, 2), Blocks.CAMPFIRE.defaultBlockState());
 				return null;
 			});
-			tp(c, Vec3d.ofBottomCenter(arena).add(1.5, 0, 2.5), Vec3d.ofBottomCenter(arena).add(3.5, 0.5, 2.5));
-			c.player.getInventory().selectedSlot = 8;
+			tp(c, Vec3.atBottomCenterOf(arena).add(1.5, 0, 2.5), Vec3.atBottomCenterOf(arena).add(3.5, 0.5, 2.5));
+			c.player.getInventory().selected = 8;
 		});
-		step(10, false, c -> KeyBinding.onKeyPressed(MagesLegacyClient.ABILITY_KEYS[3].getDefaultKey()));
+		step(10, false, c -> KeyMapping.click(MagesLegacyClient.ABILITY_KEYS[3].getDefaultKey()));
 		step(10, false, c -> {
-			UUID me = c.player.getUuid();
+			UUID me = c.player.getUUID();
 			screenshot(c, "song");
 			boolean sung = onServer(c, s -> !RaceState.get(s).data(me).shepherd.rituals.isEmpty());
 			check("song_key", sung);
 			if (!sung) {
 				// Diagnose: the key's binding, and what the Song says when called on the server for the same look
 				LOGGER.info("[harness] song key bound to {}, race {}, yaw {} pitch {}", MagesLegacyClient.ABILITY_KEYS[3].getBoundKeyTranslationKey(),
-						ClientRaceState.race, c.player.getYaw(), c.player.getPitch());
-				AbilityResult direct = onServer(c, s -> Bonds.song(s.getPlayerManager().getPlayer(me), RaceState.get(s).data(me)));
+						ClientRaceState.race, c.player.getYRot(), c.player.getXRot());
+				AbilityResult direct = onServer(c, s -> Bonds.song(s.getPlayerList().getPlayer(me), RaceState.get(s).data(me)));
 				LOGGER.info("[harness] the Song called on the server: {}", direct);
 			}
 			selectItem(c, Items.BEEF);
@@ -434,7 +434,7 @@ public class HarnessClient implements ClientModInitializer {
 			// The ritual wants a minute between feedings; the harness moves the last one back before each click
 			// (the click itself reaches the server a tick later)
 			step(2, false, c -> {
-				UUID me = c.player.getUuid();
+				UUID me = c.player.getUUID();
 				onServer(c, s -> {
 					RaceState.get(s).data(me).shepherd.rituals.values().forEach(r -> r.lastFeed -= 2400);
 					return null;
@@ -448,19 +448,19 @@ public class HarnessClient implements ClientModInitializer {
 			check("wolf_bonded", ClientRaceState.extra.getList("bonds", 10).size() == 1);
 			screenshot(c, "bonded");
 			resetCooldowns(c);
-			c.player.getInventory().selectedSlot = 8;
+			c.player.getInventory().selected = 8;
 		});
 		// Petting the wolf with a real right click, empty-handed
 		step(10, false, c -> interactWolf(c));
 		step(10, false, c -> {
-			UUID me = c.player.getUuid();
+			UUID me = c.player.getUUID();
 			check("wolf_petted", onServer(c, s -> RaceState.get(s).data(me).shepherd.bonds.get(0).pettedAt > 0));
 		});
-		step(10, false, c -> KeyBinding.onKeyPressed(MagesLegacyClient.ABILITY_KEYS[1].getDefaultKey()));
+		step(10, false, c -> KeyMapping.click(MagesLegacyClient.ABILITY_KEYS[1].getDefaultKey()));
 		step(20, false, c -> {
-			UUID me = c.player.getUuid();
-			check("rally_strengthens", onServer(c, s -> s.getOverworld().getEntitiesByClass(WolfEntity.class,
-					new Box(arena).expand(12), w -> me.equals(w.getOwnerUuid())).stream().allMatch(w -> w.hasStatusEffect(StatusEffects.STRENGTH))));
+			UUID me = c.player.getUUID();
+			check("rally_strengthens", onServer(c, s -> s.overworld().getEntitiesOfClass(Wolf.class,
+					new AABB(arena).inflate(12), w -> me.equals(w.getOwnerUUID())).stream().allMatch(w -> w.hasEffect(MobEffects.DAMAGE_BOOST))));
 			screenshot(c, "hud_shepherd");
 			c.setScreen(new BestiaryScreen());
 		});
@@ -475,47 +475,47 @@ public class HarnessClient implements ClientModInitializer {
 		// ---- The Frozen: walk, a real Rewind seen from behind mid-flight, the Dome, the tree ----
 		step(10, false, c -> {
 			commands(c, "race set @a frozen", "race xp @a 20000", "race resource @a 100", "kill @e[type=!player]");
-			c.options.hudHidden = false;
-			tp(c, Vec3d.ofBottomCenter(arena).add(-7, 0, 0), Vec3d.ofBottomCenter(arena).add(0, 1.2, 0));
+			c.options.hideGui = false;
+			tp(c, Vec3.atBottomCenterOf(arena).add(-7, 0, 0), Vec3.atBottomCenterOf(arena).add(0, 1.2, 0));
 		});
 		step(20, false, c -> check("frozen_chosen", serverRace(c) == Race.FROZEN && ClientRaceState.race == Race.FROZEN));
 		// Seven blocks east in half-block steps, so the trail has a path to fly back along
 		for (int i = 1; i <= 14; i++) {
 			double x = -7 + i * 0.5;
-			step(4, false, c -> tp(c, Vec3d.ofBottomCenter(arena).add(x, 0, 0), Vec3d.ofBottomCenter(arena).add(x + 7, 1.2, 0)));
+			step(4, false, c -> tp(c, Vec3.atBottomCenterOf(arena).add(x, 0, 0), Vec3.atBottomCenterOf(arena).add(x + 7, 1.2, 0)));
 		}
 		step(5, false, c -> {
-			c.options.setPerspective(Perspective.THIRD_PERSON_BACK);
+			c.options.setCameraType(CameraType.THIRD_PERSON_BACK);
 			screenshot(c, "frozen_before");
 		});
 		// The key reaches the server a tick or two later; the flight itself takes half a second
-		step(4, false, c -> KeyBinding.onKeyPressed(MagesLegacyClient.ABILITY_KEYS[0].getDefaultKey()));
+		step(4, false, c -> KeyMapping.click(MagesLegacyClient.ABILITY_KEYS[0].getDefaultKey()));
 		step(3, false, c -> screenshot(c, "rewind_mid"));
 		step(12, false, c -> screenshot(c, "rewind_late"));
 		step(5, false, c -> {
-			UUID me = c.player.getUuid();
-			double x = onServer(c, s -> s.getPlayerManager().getPlayer(me).getX());
-			check("rewind_back", x < Vec3d.ofBottomCenter(arena).x - 2.5);
+			UUID me = c.player.getUUID();
+			double x = onServer(c, s -> s.getPlayerList().getPlayer(me).getX());
+			check("rewind_back", x < Vec3.atBottomCenterOf(arena).x - 2.5);
 			screenshot(c, "rewind_end");
-			c.options.setPerspective(Perspective.FIRST_PERSON);
+			c.options.setCameraType(CameraType.FIRST_PERSON);
 			resetCooldowns(c);
-			UUID frozenId = c.player.getUuid();
+			UUID frozenId = c.player.getUUID();
 			onServer(c, s -> {
 				// Two blocks beside the Frozen, wherever the Rewind left it: well inside the Dome
-				ServerWorld world = s.getOverworld();
-				Vec3d here = s.getPlayerManager().getPlayer(frozenId).getPos();
-				ZombieEntity zombie = EntityType.ZOMBIE.create(world);
-				zombie.refreshPositionAndAngles(here.x, here.y, here.z + 2, 0, 0);
-				zombie.setAiDisabled(true);
-				world.spawnEntity(zombie);
+				ServerLevel world = s.overworld();
+				Vec3 here = s.getPlayerList().getPlayer(frozenId).position();
+				Zombie zombie = EntityType.ZOMBIE.create(world);
+				zombie.moveTo(here.x, here.y, here.z + 2, 0, 0);
+				zombie.setNoAi(true);
+				world.addFreshEntity(zombie);
 				return null;
 			});
 		});
-		step(5, false, c -> KeyBinding.onKeyPressed(MagesLegacyClient.ABILITY_KEYS[1].getDefaultKey()));
+		step(5, false, c -> KeyMapping.click(MagesLegacyClient.ABILITY_KEYS[1].getDefaultKey()));
 		step(10, false, c -> {
-			check("frozen_dome", onServer(c, s -> s.getOverworld().getEntitiesByClass(ZombieEntity.class, new Box(arena).expand(12),
-					z -> z.hasStatusEffect(StatusEffects.SLOWNESS)).size() == 1));
-			tp(c, Vec3d.ofBottomCenter(arena).add(-1, 0, -5), Vec3d.ofBottomCenter(arena).add(-4, 1, 0));
+			check("frozen_dome", onServer(c, s -> s.overworld().getEntitiesOfClass(Zombie.class, new AABB(arena).inflate(12),
+					z -> z.hasEffect(MobEffects.MOVEMENT_SLOWDOWN)).size() == 1));
+			tp(c, Vec3.atBottomCenterOf(arena).add(-1, 0, -5), Vec3.atBottomCenterOf(arena).add(-4, 1, 0));
 		});
 		step(10, true, c -> screenshot(c, "frozen_dome"));
 		// The Quickening the way a player uses it: a burning furnace in front, a real G
@@ -523,27 +523,27 @@ public class HarnessClient implements ClientModInitializer {
 			resetCooldowns(c);
 			commands(c, "race resource @a 100");
 			onServer(c, s -> {
-				ServerWorld world = s.getOverworld();
-				BlockPos furnace = arena.add(4, 0, -3);
-				world.setBlockState(furnace, Blocks.FURNACE.getDefaultState());
+				ServerLevel world = s.overworld();
+				BlockPos furnace = arena.offset(4, 0, -3);
+				world.setBlockAndUpdate(furnace, Blocks.FURNACE.defaultBlockState());
 				if (world.getBlockEntity(furnace) instanceof AbstractFurnaceBlockEntity be) {
-					be.setStack(0, new ItemStack(Items.RAW_IRON, 16));
-					be.setStack(1, new ItemStack(Items.COAL, 8));
+					be.setItem(0, new ItemStack(Items.RAW_IRON, 16));
+					be.setItem(1, new ItemStack(Items.COAL, 8));
 				}
 				return null;
 			});
-			tp(c, Vec3d.ofBottomCenter(arena).add(4, 0, -1), Vec3d.ofCenter(arena.add(4, 0, -3)));
+			tp(c, Vec3.atBottomCenterOf(arena).add(4, 0, -1), Vec3.atCenterOf(arena.offset(4, 0, -3)));
 		});
 		// The press, then three seconds (a step waits after its action)
-		step(60, false, c -> KeyBinding.onKeyPressed(MagesLegacyClient.ABILITY_KEYS[2].getDefaultKey()));
+		step(60, false, c -> KeyMapping.click(MagesLegacyClient.ABILITY_KEYS[2].getDefaultKey()));
 		step(10, false, c -> {
-			UUID me = c.player.getUuid();
+			UUID me = c.player.getUUID();
 			float sand = onServer(c, s -> RaceState.get(s).data(me).resource);
-			int smelted = onServer(c, s -> s.getOverworld().getBlockEntity(arena.add(4, 0, -3)) instanceof AbstractFurnaceBlockEntity be
-					? be.getStack(2).getCount() : -1);
+			int smelted = onServer(c, s -> s.overworld().getBlockEntity(arena.offset(4, 0, -3)) instanceof AbstractFurnaceBlockEntity be
+					? be.getItem(2).getCount() : -1);
 			LOGGER.info("[harness] quickening: sand {}, iron smelted in 3 s: {}", sand, smelted);
-			LOGGER.info("[harness] quickening: furnace quickened {}, nbt {}", onServer(c, s -> Frozen.quickened(s.getOverworld(), arena.add(4, 0, -3))),
-					onServer(c, s -> s.getOverworld().getBlockEntity(arena.add(4, 0, -3)) instanceof AbstractFurnaceBlockEntity be ? be.createNbt().toString() : "none"));
+			LOGGER.info("[harness] quickening: furnace quickened {}, nbt {}", onServer(c, s -> Frozen.quickened(s.overworld(), arena.offset(4, 0, -3))),
+					onServer(c, s -> s.overworld().getBlockEntity(arena.offset(4, 0, -3)) instanceof AbstractFurnaceBlockEntity be ? be.saveWithoutMetadata().toString() : "none"));
 			// A plain furnace smelts one item in 10 s; quickened, three seconds give a couple
 			check("quicken_key", sand < 95 && smelted >= 2);
 			screenshot(c, "quicken");
@@ -560,75 +560,75 @@ public class HarnessClient implements ClientModInitializer {
 		step(10, false, c -> {
 			commands(c, "race set @a bloodkin", "race xp @a 20000", "race resource @a 100", "kill @e[type=!player]",
 					"item replace entity @a armor.head with minecraft:leather_helmet");
-			c.options.hudHidden = false;
-			c.options.setPerspective(Perspective.FIRST_PERSON);
+			c.options.hideGui = false;
+			c.options.setCameraType(CameraType.FIRST_PERSON);
 			onServer(c, s -> {
-				spawnStill(s.getOverworld(), EntityType.SPIDER, arena.add(-3, 0, 0));
+				spawnStill(s.overworld(), EntityType.SPIDER, arena.offset(-3, 0, 0));
 				return null;
 			});
-			tp(c, Vec3d.ofBottomCenter(arena).add(-7, 0, 0), Vec3d.ofBottomCenter(arena).add(0, 1.0, 0));
+			tp(c, Vec3.atBottomCenterOf(arena).add(-7, 0, 0), Vec3.atBottomCenterOf(arena).add(0, 1.0, 0));
 		});
 		step(10, false, c -> check("bloodkin_chosen", serverRace(c) == Race.BLOODKIN && ClientRaceState.race == Race.BLOODKIN));
-		step(5, false, c -> KeyBinding.onKeyPressed(MagesLegacyClient.ABILITY_KEYS[0].getDefaultKey()));
+		step(5, false, c -> KeyMapping.click(MagesLegacyClient.ABILITY_KEYS[0].getDefaultKey()));
 		step(1, false, c -> {
 			LOGGER.info("[harness] dash fx: {}", FxRenderer.describe());
 			screenshot(c, "blood_dash");
-			c.options.setPerspective(Perspective.THIRD_PERSON_BACK);
+			c.options.setCameraType(CameraType.THIRD_PERSON_BACK);
 		});
 		step(8, false, c -> {
 			screenshot(c, "blood_dash_side");
-			c.options.setPerspective(Perspective.FIRST_PERSON);
+			c.options.setCameraType(CameraType.FIRST_PERSON);
 		});
 		step(5, false, c -> {
-			check("dash_cuts", onServer(c, s -> s.getOverworld().getEntitiesByClass(SpiderEntity.class, new Box(arena).expand(12),
+			check("dash_cuts", onServer(c, s -> s.overworld().getEntitiesOfClass(Spider.class, new AABB(arena).inflate(12),
 					sp -> sp.getHealth() < sp.getMaxHealth()).size() == 1));
 			resetCooldowns(c);
-			UUID me = c.player.getUuid();
+			UUID me = c.player.getUUID();
 			onServer(c, s -> {
-				Vec3d here = s.getPlayerManager().getPlayer(me).getPos();
-				spawnStill(s.getOverworld(), EntityType.SPIDER, BlockPos.ofFloored(here).add(3, 0, 2));
-				spawnStill(s.getOverworld(), EntityType.SPIDER, BlockPos.ofFloored(here).add(3, 0, -2));
+				Vec3 here = s.getPlayerList().getPlayer(me).position();
+				spawnStill(s.overworld(), EntityType.SPIDER, BlockPos.containing(here).offset(3, 0, 2));
+				spawnStill(s.overworld(), EntityType.SPIDER, BlockPos.containing(here).offset(3, 0, -2));
 				return null;
 			});
 		});
-		step(5, false, c -> KeyBinding.onKeyPressed(MagesLegacyClient.ABILITY_KEYS[1].getDefaultKey()));
+		step(5, false, c -> KeyMapping.click(MagesLegacyClient.ABILITY_KEYS[1].getDefaultKey()));
 		step(1, false, c -> {
 			LOGGER.info("[harness] harvest fx: {}", FxRenderer.describe());
 			screenshot(c, "blood_harvest");
-			c.options.setPerspective(Perspective.THIRD_PERSON_FRONT);
+			c.options.setCameraType(CameraType.THIRD_PERSON_FRONT);
 		});
 		step(4, false, c -> {
 		});
 		step(6, false, c -> {
 			screenshot(c, "blood_harvest_side");
-			c.options.setPerspective(Perspective.FIRST_PERSON);
+			c.options.setCameraType(CameraType.FIRST_PERSON);
 		});
 		step(5, false, c -> {
-			check("harvest_drinks", onServer(c, s -> s.getOverworld().getEntitiesByClass(SpiderEntity.class, new Box(arena).expand(16),
+			check("harvest_drinks", onServer(c, s -> s.overworld().getEntitiesOfClass(Spider.class, new AABB(arena).inflate(16),
 					sp -> sp.getHealth() < sp.getMaxHealth()).size() >= 2));
 			commands(c, "kill @e[type=!player]");
 			// A pig behind a stone wall: a Bloodkin hears its heart through it
 			onServer(c, s -> {
-				ServerWorld world = s.getOverworld();
+				ServerLevel world = s.overworld();
 				for (int dz = -2; dz <= 2; dz++) {
 					for (int dy = 0; dy < 3; dy++) {
-						world.setBlockState(arena.add(-2, dy, dz), Blocks.STONE.getDefaultState());
+						world.setBlockAndUpdate(arena.offset(-2, dy, dz), Blocks.STONE.defaultBlockState());
 					}
 				}
-				spawnStill(world, EntityType.PIG, arena.add(0, 0, 0));
+				spawnStill(world, EntityType.PIG, arena.offset(0, 0, 0));
 				return null;
 			});
-			tp(c, Vec3d.ofBottomCenter(arena).add(-6, 0, 0), Vec3d.ofBottomCenter(arena).add(0, 0.8, 0));
+			tp(c, Vec3.atBottomCenterOf(arena).add(-6, 0, 0), Vec3.atBottomCenterOf(arena).add(0, 0.8, 0));
 		});
 		step(20, true, c -> screenshot(c, "heartbeat"));
 		step(5, false, c -> {
 			resetCooldowns(c);
-			KeyBinding.onKeyPressed(MagesLegacyClient.ABILITY_KEYS[2].getDefaultKey());
+			KeyMapping.click(MagesLegacyClient.ABILITY_KEYS[2].getDefaultKey());
 		});
 		step(4, false, c -> screenshot(c, "blood_sacrifice"));
 		step(10, false, c -> {
-			UUID me = c.player.getUuid();
-			check("sacrifice_pays", onServer(c, s -> s.getPlayerManager().getPlayer(me).getHealth() < s.getPlayerManager().getPlayer(me).getMaxHealth()));
+			UUID me = c.player.getUUID();
+			check("sacrifice_pays", onServer(c, s -> s.getPlayerList().getPlayer(me).getHealth() < s.getPlayerList().getPlayer(me).getMaxHealth()));
 			screenshot(c, "hud_bloodkin");
 			c.setScreen(new TalentScreen());
 		});
@@ -638,7 +638,7 @@ public class HarnessClient implements ClientModInitializer {
 			onServer(c, s -> {
 				for (int dz = -2; dz <= 2; dz++) {
 					for (int dy = 0; dy < 3; dy++) {
-						s.getOverworld().removeBlock(arena.add(-2, dy, dz), false);
+						s.overworld().removeBlock(arena.offset(-2, dy, dz), false);
 					}
 				}
 				return null;
@@ -647,9 +647,9 @@ public class HarnessClient implements ClientModInitializer {
 		// H: the bat swarm, the way a player presses it
 		step(5, false, c -> {
 			resetCooldowns(c);
-			UUID me = c.player.getUuid();
+			UUID me = c.player.getUUID();
 			onServer(c, s -> {
-				ServerPlayerEntity player = s.getPlayerManager().getPlayer(me);
+				ServerPlayer player = s.getPlayerList().getPlayer(me);
 				RaceData data = RaceState.get(s).data(me);
 				data.addResource(100);
 				player.setHealth(player.getMaxHealth());
@@ -657,26 +657,26 @@ public class HarnessClient implements ClientModInitializer {
 				return null;
 			});
 		});
-		step(4, false, c -> KeyBinding.onKeyPressed(MagesLegacyClient.ABILITY_KEYS[3].getDefaultKey()));
+		step(4, false, c -> KeyMapping.click(MagesLegacyClient.ABILITY_KEYS[3].getDefaultKey()));
 		step(5, false, c -> {
-			UUID me = c.player.getUuid();
-			boolean sneakSeen = onServer(c, s -> RaceState.get(s).data(me).readyAt.getOrDefault(4, 0L) > s.getTicks());
-			boolean sacrificed = onServer(c, s -> s.getPlayerManager().getPlayer(me).getHealth() < s.getPlayerManager().getPlayer(me).getMaxHealth());
-			int bats = onServer(c, s -> s.getOverworld().getEntitiesByClass(BatEntity.class, new Box(arena).expand(24), b -> true).size());
+			UUID me = c.player.getUUID();
+			boolean sneakSeen = onServer(c, s -> RaceState.get(s).data(me).readyAt.getOrDefault(4, 0L) > s.getTickCount());
+			boolean sacrificed = onServer(c, s -> s.getPlayerList().getPlayer(me).getHealth() < s.getPlayerList().getPlayer(me).getMaxHealth());
+			int bats = onServer(c, s -> s.overworld().getEntitiesOfClass(Bat.class, new AABB(arena).inflate(24), b -> true).size());
 			LOGGER.info("[harness] H: swarm cooldown {}, sacrificed {}, bats {}", sneakSeen, sacrificed, bats);
 			check("h_swarm", sneakSeen && !sacrificed && bats > 0);
-			c.options.setPerspective(Perspective.THIRD_PERSON_BACK);
+			c.options.setCameraType(CameraType.THIRD_PERSON_BACK);
 		});
 		step(10, false, c -> {
 			screenshot(c, "bat_swarm");
-			c.options.setPerspective(Perspective.FIRST_PERSON);
+			c.options.setCameraType(CameraType.FIRST_PERSON);
 		});
 		// Alt with the Feast crown: the crown of blood, seen from behind
 		step(60, false, c -> {
 			resetCooldowns(c);
-			UUID me = c.player.getUuid();
+			UUID me = c.player.getUUID();
 			onServer(c, s -> {
-				ServerPlayerEntity player = s.getPlayerManager().getPlayer(me);
+				ServerPlayer player = s.getPlayerList().getPlayer(me);
 				RaceData data = RaceState.get(s).data(me);
 				data.talents.add(Talents.FANG_FEAST);
 				data.addResource(100);
@@ -684,15 +684,15 @@ public class HarnessClient implements ClientModInitializer {
 				return null;
 			});
 		});
-		step(4, false, c -> KeyBinding.onKeyPressed(MagesLegacyClient.ABILITY_KEYS[4].getDefaultKey()));
+		step(4, false, c -> KeyMapping.click(MagesLegacyClient.ABILITY_KEYS[4].getDefaultKey()));
 		step(8, false, c -> {
-			UUID me = c.player.getUuid();
-			check("alt_feast", onServer(c, s -> RaceState.get(s).data(me).readyAt.getOrDefault(5, 0L) > s.getTicks()));
-			c.options.setPerspective(Perspective.THIRD_PERSON_BACK);
+			UUID me = c.player.getUUID();
+			check("alt_feast", onServer(c, s -> RaceState.get(s).data(me).readyAt.getOrDefault(5, 0L) > s.getTickCount()));
+			c.options.setCameraType(CameraType.THIRD_PERSON_BACK);
 		});
 		step(6, false, c -> {
 			screenshot(c, "blood_feast");
-			c.options.setPerspective(Perspective.FIRST_PERSON);
+			c.options.setCameraType(CameraType.FIRST_PERSON);
 			TalentScreen screen = new TalentScreen();
 			c.setScreen(screen);
 			screen.toggleTraits();
@@ -705,21 +705,21 @@ public class HarnessClient implements ClientModInitializer {
 		step(10, false, c -> {
 			commands(c, "race set @a voidborn", "race xp @a 20000", "race resource @a 100", "kill @e[type=!player]", "weather clear", "time set 6000");
 			onServer(c, s -> {
-				ServerWorld world = s.getOverworld();
+				ServerLevel world = s.overworld();
 				for (int dx = -4; dx <= 4; dx++) {
 					for (int dy = 0; dy <= 3; dy++) {
 						for (int dz = 2; dz <= 4; dz++) {
-							world.setBlockState(arena.add(dx, dy, dz), Blocks.STONE_BRICKS.getDefaultState());
+							world.setBlockAndUpdate(arena.offset(dx, dy, dz), Blocks.STONE_BRICKS.defaultBlockState());
 						}
 					}
 				}
 				return null;
 			});
-			c.options.setPerspective(Perspective.FIRST_PERSON);
-			tp(c, Vec3d.ofBottomCenter(arena).add(0, 0, -3), Vec3d.ofBottomCenter(arena).add(0, 1.6, 6));
+			c.options.setCameraType(CameraType.FIRST_PERSON);
+			tp(c, Vec3.atBottomCenterOf(arena).add(0, 0, -3), Vec3.atBottomCenterOf(arena).add(0, 1.6, 6));
 		});
 		step(10, false, c -> check("voidborn_chosen", serverRace(c) == Race.VOIDBORN && ClientRaceState.race == Race.VOIDBORN));
-		step(4, false, c -> KeyBinding.onKeyPressed(MagesLegacyClient.ABILITY_KEYS[0].getDefaultKey()));
+		step(4, false, c -> KeyMapping.click(MagesLegacyClient.ABILITY_KEYS[0].getDefaultKey()));
 		step(14, false, c -> {
 			LOGGER.info("[harness] void step fx: {}", FxRenderer.describe());
 			screenshot(c, "void_step_mid");
@@ -727,68 +727,68 @@ public class HarnessClient implements ClientModInitializer {
 		step(4, false, c -> {
 			double z = c.player.getZ() - arena.getZ();
 			LOGGER.info("[harness] void step: now at z+{}", z);
-			check("void_step_through", z > 4.5 && c.world.isSpaceEmpty(c.player, c.player.getBoundingBox()));
-			c.options.setPerspective(Perspective.THIRD_PERSON_BACK);
+			check("void_step_through", z > 4.5 && c.level.noCollision(c.player, c.player.getBoundingBox()));
+			c.options.setCameraType(CameraType.THIRD_PERSON_BACK);
 		});
 		step(4, false, c -> screenshot(c, "void_step_end"));
 		// The Well, opened on the ground ahead, with three zombies around it
 		step(40, false, c -> {
-			c.options.setPerspective(Perspective.THIRD_PERSON_BACK);
+			c.options.setCameraType(CameraType.THIRD_PERSON_BACK);
 			resetCooldowns(c);
 			commands(c, "race resource @a 100");
 			onServer(c, s -> {
-				ServerWorld world = s.getOverworld();
+				ServerLevel world = s.overworld();
 				for (int dx = -4; dx <= 4; dx++) {
 					for (int dy = 0; dy <= 3; dy++) {
 						for (int dz = 2; dz <= 4; dz++) {
-							world.removeBlock(arena.add(dx, dy, dz), false);
+							world.removeBlock(arena.offset(dx, dy, dz), false);
 						}
 					}
 				}
-				spawnStill(world, EntityType.ZOMBIE, arena.add(-3, 0, 4));
-				spawnStill(world, EntityType.ZOMBIE, arena.add(3, 0, 4));
-				spawnStill(world, EntityType.ZOMBIE, arena.add(0, 0, 6));
+				spawnStill(world, EntityType.ZOMBIE, arena.offset(-3, 0, 4));
+				spawnStill(world, EntityType.ZOMBIE, arena.offset(3, 0, 4));
+				spawnStill(world, EntityType.ZOMBIE, arena.offset(0, 0, 6));
 				return null;
 			});
-			tp(c, Vec3d.ofBottomCenter(arena).add(0, 0, -5), Vec3d.ofBottomCenter(arena).add(0, 0, 3));
+			tp(c, Vec3.atBottomCenterOf(arena).add(0, 0, -5), Vec3.atBottomCenterOf(arena).add(0, 0, 3));
 		});
-		step(20, false, c -> KeyBinding.onKeyPressed(MagesLegacyClient.ABILITY_KEYS[1].getDefaultKey()));
+		step(20, false, c -> KeyMapping.click(MagesLegacyClient.ABILITY_KEYS[1].getDefaultKey()));
 		step(80, false, c -> {
 			LOGGER.info("[harness] well fx: {}", FxRenderer.describe());
 			screenshot(c, "void_well");
 		});
 		step(10, false, c -> {
-			c.options.setPerspective(Perspective.FIRST_PERSON);
+			c.options.setCameraType(CameraType.FIRST_PERSON);
 			commands(c, "kill @e[type=!player]");
 			resetCooldowns(c);
 			commands(c, "race resource @a 100");
 			onServer(c, s -> {
-				spawnStill(s.getOverworld(), EntityType.ZOMBIE, arena.add(0, 0, 3));
+				spawnStill(s.overworld(), EntityType.ZOMBIE, arena.offset(0, 0, 3));
 				return null;
 			});
-			tp(c, Vec3d.ofBottomCenter(arena).add(0, 0, -3), Vec3d.ofBottomCenter(arena).add(0, 1.2, 3));
+			tp(c, Vec3.atBottomCenterOf(arena).add(0, 0, -3), Vec3.atBottomCenterOf(arena).add(0, 1.2, 3));
 		});
 		// The Excision: the zombie is gone into the pocket for six seconds, then back
-		step(30, false, c -> KeyBinding.onKeyPressed(MagesLegacyClient.ABILITY_KEYS[2].getDefaultKey()));
+		step(30, false, c -> KeyMapping.click(MagesLegacyClient.ABILITY_KEYS[2].getDefaultKey()));
 		step(140, false, c -> {
-			UUID me = c.player.getUuid();
+			UUID me = c.player.getUUID();
 			LOGGER.info("[harness] excision: cooling {}, void {}, looking at {}",
-					onServer(c, s -> RaceState.get(s).data(me).readyAt.getOrDefault(2, 0L) > s.getTicks()),
-					onServer(c, s -> RaceState.get(s).data(me).resource), c.crosshairTarget);
+					onServer(c, s -> RaceState.get(s).data(me).readyAt.getOrDefault(2, 0L) > s.getTickCount()),
+					onServer(c, s -> RaceState.get(s).data(me).resource), c.hitResult);
 			screenshot(c, "void_excise");
-			int here = onServer(c, s -> s.getOverworld().getEntitiesByClass(ZombieEntity.class, new Box(arena).expand(12), z -> z.isAlive()).size());
+			int here = onServer(c, s -> s.overworld().getEntitiesOfClass(Zombie.class, new AABB(arena).inflate(12), z -> z.isAlive()).size());
 			LOGGER.info("[harness] excision: zombies left here {}", here);
 			check("excise_away", here == 0);
 		});
 		// It waits in the pocket until Z is pressed again
 		step(20, false, c -> {
-			UUID me = c.player.getUuid();
+			UUID me = c.player.getUUID();
 			check("excise_holds", ClientRaceState.extra.getBoolean("holding")
-					&& onServer(c, s -> RaceState.get(s).data(me).readyAt.getOrDefault(2, 0L) <= s.getTicks()));
-			KeyBinding.onKeyPressed(MagesLegacyClient.ABILITY_KEYS[2].getDefaultKey());
+					&& onServer(c, s -> RaceState.get(s).data(me).readyAt.getOrDefault(2, 0L) <= s.getTickCount()));
+			KeyMapping.click(MagesLegacyClient.ABILITY_KEYS[2].getDefaultKey());
 		});
 		step(10, false, c -> {
-			int here = onServer(c, s -> s.getOverworld().getEntitiesByClass(ZombieEntity.class, new Box(arena).expand(12), z -> z.isAlive()).size());
+			int here = onServer(c, s -> s.overworld().getEntitiesOfClass(Zombie.class, new AABB(arena).inflate(12), z -> z.isAlive()).size());
 			LOGGER.info("[harness] excision: zombies back {}", here);
 			check("excise_back", here == 1);
 			screenshot(c, "hud_voidborn");
@@ -797,22 +797,22 @@ public class HarnessClient implements ClientModInitializer {
 			commands(c, "race resource @a 100");
 		});
 		// Into the Pocket through a rift, and back out to the same spot
-		step(4, false, c -> KeyBinding.onKeyPressed(MagesLegacyClient.ABILITY_KEYS[3].getDefaultKey()));
+		step(4, false, c -> KeyMapping.click(MagesLegacyClient.ABILITY_KEYS[3].getDefaultKey()));
 		step(40, false, c -> screenshot(c, "pocket_rift"));
 		step(10, false, c -> {
-			LOGGER.info("[harness] pocket: client world {}", c.world.getRegistryKey().getValue());
-			check("pocket_in", c.world.getRegistryKey() == Pocket.WORLD);
-			c.options.setPerspective(Perspective.THIRD_PERSON_BACK);
+			LOGGER.info("[harness] pocket: client world {}", c.level.dimension().location());
+			check("pocket_in", c.level.dimension() == Pocket.WORLD);
+			c.options.setCameraType(CameraType.THIRD_PERSON_BACK);
 		});
 		step(10, false, c -> {
 			screenshot(c, "pocket");
-			c.options.setPerspective(Perspective.FIRST_PERSON);
+			c.options.setCameraType(CameraType.FIRST_PERSON);
 		});
-		step(40, false, c -> KeyBinding.onKeyPressed(MagesLegacyClient.ABILITY_KEYS[3].getDefaultKey()));
+		step(40, false, c -> KeyMapping.click(MagesLegacyClient.ABILITY_KEYS[3].getDefaultKey()));
 		step(10, false, c -> {
-			double away = c.player.getPos().distanceTo(Vec3d.ofBottomCenter(arena).add(0, 0, -3));
-			LOGGER.info("[harness] pocket: back in {} at {} from the start", c.world.getRegistryKey().getValue(), away);
-			check("pocket_out", c.world.getRegistryKey() == World.OVERWORLD && away < 1.5);
+			double away = c.player.position().distanceTo(Vec3.atBottomCenterOf(arena).add(0, 0, -3));
+			LOGGER.info("[harness] pocket: back in {} at {} from the start", c.level.dimension().location(), away);
+			check("pocket_out", c.level.dimension() == Level.OVERWORLD && away < 1.5);
 		});
 		step(10, false, c -> c.setScreen(new TalentScreen()));
 		step(20, false, c -> {
@@ -824,16 +824,16 @@ public class HarnessClient implements ClientModInitializer {
 		step(10, false, c -> commands(c, "race set @a mercenary", "race xp @a 20000", "kill @e[type=!player]"));
 		step(30, false, c -> {
 			check("mercenary_chosen", serverRace(c) == Race.MERCENARY && ClientRaceState.race == Race.MERCENARY);
-			KeyBinding.onKeyPressed(MagesLegacyClient.ABILITY_KEYS[3].getDefaultKey());
+			KeyMapping.click(MagesLegacyClient.ABILITY_KEYS[3].getDefaultKey());
 		});
 		step(20, false, c -> {
-			check("shop_opens", c.currentScreen instanceof MercShopScreen);
+			check("shop_opens", c.screen instanceof MercShopScreen);
 			check("board_filled", ClientRaceState.extra.getList("offers", 10).size() == 3);
 			screenshot(c, "merc_board");
 			MagesLegacyClient.sendMerc(0, 0, "");
 		});
 		step(20, false, c -> {
-			UUID me = c.player.getUuid();
+			UUID me = c.player.getUUID();
 			check("contract_taken", onServer(c, s -> RaceState.get(s).data(me).merc.active.size() == 1));
 			screenshot(c, "merc_board_taken");
 			onServer(c, s -> {
@@ -844,12 +844,12 @@ public class HarnessClient implements ClientModInitializer {
 					data.merc.stock.add("arrows");
 				}
 				data.merc.deal = "";
-				RacePackets.sync(s.getPlayerManager().getPlayer(me), data);
+				RacePackets.sync(s.getPlayerList().getPlayer(me), data);
 				return null;
 			});
 		});
 		step(10, false, c -> {
-			if (c.currentScreen instanceof MercShopScreen shop) {
+			if (c.screen instanceof MercShopScreen shop) {
 				shop.showShop(true);
 			}
 		});
@@ -858,24 +858,24 @@ public class HarnessClient implements ClientModInitializer {
 			MagesLegacyClient.sendMerc(4, 0, "arrows");
 		});
 		step(20, false, c -> {
-			UUID me = c.player.getUuid();
+			UUID me = c.player.getUUID();
 			check("ware_bought", onServer(c, s -> RaceState.get(s).data(me).merc.tokens == 57
-					&& s.getPlayerManager().getPlayer(me).getInventory().count(Items.ARROW) >= 32));
+					&& s.getPlayerList().getPlayer(me).getInventory().countItem(Items.ARROW) >= 32));
 			c.setScreen(null);
 			onServer(c, s -> {
-				s.getPlayerManager().getPlayer(me).setHealth(20);
+				s.getPlayerList().getPlayer(me).setHealth(20);
 				return null;
 			});
 		});
-		step(10, false, c -> KeyBinding.onKeyPressed(MagesLegacyClient.ABILITY_KEYS[0].getDefaultKey()));
+		step(10, false, c -> KeyMapping.click(MagesLegacyClient.ABILITY_KEYS[0].getDefaultKey()));
 		step(10, false, c -> {
-			UUID me = c.player.getUuid();
-			check("credit_strike_paid", onServer(c, s -> s.getPlayerManager().getPlayer(me).getHealth() < 20));
-			c.options.setPerspective(Perspective.THIRD_PERSON_BACK);
+			UUID me = c.player.getUUID();
+			check("credit_strike_paid", onServer(c, s -> s.getPlayerList().getPlayer(me).getHealth() < 20));
+			c.options.setCameraType(CameraType.THIRD_PERSON_BACK);
 		});
 		step(5, false, c -> {
 			screenshot(c, "credit_strike");
-			c.options.setPerspective(Perspective.FIRST_PERSON);
+			c.options.setCameraType(CameraType.FIRST_PERSON);
 		});
 
 		// The Mercenaries' own shapes: the Exchange's crossing orbs, the Pledge's seal, the Stake's coin, the Shop's door
@@ -883,17 +883,17 @@ public class HarnessClient implements ClientModInitializer {
 			resetCooldowns(c);
 			commands(c, "kill @e[type=!player]", spider(arena, 0, 20));
 			grant(c, Talents.DEAL_STAKE);
-			tp(c, Vec3d.ofBottomCenter(arena).add(-5, 0, 0), Vec3d.ofBottomCenter(arena).add(0, 0.5, 0));
+			tp(c, Vec3.atBottomCenterOf(arena).add(-5, 0, 0), Vec3.atBottomCenterOf(arena).add(0, 0.5, 0));
 		});
 		step(4, false, c -> {
-			c.options.setPerspective(Perspective.THIRD_PERSON_BACK);
+			c.options.setCameraType(CameraType.THIRD_PERSON_BACK);
 			key(1);
 		});
 		shotWhen("Exchange", 0.45f, "fx_merc_exchange");
 		step(4, false, c -> {
-			UUID me = c.player.getUuid();
+			UUID me = c.player.getUUID();
 			onServer(c, s -> {
-				s.getPlayerManager().getPlayer(me).equipStack(net.minecraft.entity.EquipmentSlot.CHEST, new net.minecraft.item.ItemStack(Items.IRON_CHESTPLATE));
+				s.getPlayerList().getPlayer(me).setItemSlot(net.minecraft.world.entity.EquipmentSlot.CHEST, new net.minecraft.world.item.ItemStack(Items.IRON_CHESTPLATE));
 				return null;
 			});
 			key(2);
@@ -905,7 +905,7 @@ public class HarnessClient implements ClientModInitializer {
 		shotWhen("Flip", 0.8f, "fx_merc_stake_coins");
 		// The Shop's door: open while the Shop is (the screen itself would hide it, so only the message is sent), shut after
 		step(10, false, c -> {
-			c.options.setPerspective(Perspective.THIRD_PERSON_BACK);
+			c.options.setCameraType(CameraType.THIRD_PERSON_BACK);
 			MagesLegacyClient.sendMerc(5, 0, "");
 		});
 		shotWhen("Door", 0.005f, "fx_merc_door");
@@ -915,17 +915,17 @@ public class HarnessClient implements ClientModInitializer {
 
 		// ---- The Tempters: the Kiss's hearts, the Wings, the Charm's heart, the Lullaby's moons, the Broken Heart ----
 		step(10, false, c -> {
-			c.options.setPerspective(Perspective.FIRST_PERSON);
+			c.options.setCameraType(CameraType.FIRST_PERSON);
 			commands(c, "race set @a tempter", "race xp @a 20000", "race resource @a 100", "kill @e[type=!player]", "time set night",
-					spider(arena, 0, 16), spider(arena.add(2, 0, 3), 0, 16), spider(arena.add(1, 0, -3), 0, 16));
+					spider(arena, 0, 16), spider(arena.offset(2, 0, 3), 0, 16), spider(arena.offset(1, 0, -3), 0, 16));
 		});
 		step(20, false, c -> {
 			check("tempter_chosen", serverRace(c) == Race.TEMPTER && ClientRaceState.race == Race.TEMPTER);
 			grant(c, Talents.THREAD_BREAK);
-			tp(c, Vec3d.ofBottomCenter(arena).add(-6, 0, 0), Vec3d.ofBottomCenter(arena).add(0, 0.5, 0));
+			tp(c, Vec3.atBottomCenterOf(arena).add(-6, 0, 0), Vec3.atBottomCenterOf(arena).add(0, 0.5, 0));
 		});
 		step(4, false, c -> {
-			c.options.setPerspective(Perspective.THIRD_PERSON_BACK);
+			c.options.setCameraType(CameraType.THIRD_PERSON_BACK);
 			key(0);
 		});
 		shotWhen("Hearts", 0.35f, "fx_tempter_kiss");
@@ -935,7 +935,7 @@ public class HarnessClient implements ClientModInitializer {
 		step(30, false, c -> {
 			resetCooldowns(c);
 			commands(c, "race resource @a 100");
-			tp(c, Vec3d.ofBottomCenter(arena).add(-4, 0, -1), Vec3d.ofBottomCenter(arena).add(2, 0.5, 3));
+			tp(c, Vec3.atBottomCenterOf(arena).add(-4, 0, -1), Vec3.atBottomCenterOf(arena).add(2, 0.5, 3));
 		});
 		step(4, false, c -> key(2));
 		shotWhen("Sigil", 0.1f, "fx_tempter_charm");
@@ -953,40 +953,40 @@ public class HarnessClient implements ClientModInitializer {
 
 		// ---- The Masked: a face torn off a weakened zombie, then a spider's; the wearer drawn as the monster ----
 		step(10, false, c -> {
-			c.options.setPerspective(Perspective.FIRST_PERSON);
+			c.options.setCameraType(CameraType.FIRST_PERSON);
 			commands(c, "race set @a masked", "race xp @a 20000", "race resource @a 100", "kill @e[type=!player]",
 					String.format(Locale.ROOT, "summon zombie %d %d %d {NoAI:1b,Health:4f}", arena.getX(), arena.getY(), arena.getZ()));
 		});
 		step(20, false, c -> {
 			check("masked_chosen", serverRace(c) == Race.MASKED && ClientRaceState.race == Race.MASKED);
-			tp(c, Vec3d.ofBottomCenter(arena).add(-3, 0, 0), Vec3d.ofBottomCenter(arena).add(0, 1, 0));
+			tp(c, Vec3.atBottomCenterOf(arena).add(-3, 0, 0), Vec3.atBottomCenterOf(arena).add(0, 1, 0));
 		});
 		step(6, false, c -> {
-			c.options.setPerspective(Perspective.THIRD_PERSON_BACK);
-			KeyBinding.onKeyPressed(MagesLegacyClient.ABILITY_KEYS[0].getDefaultKey());
+			c.options.setCameraType(CameraType.THIRD_PERSON_BACK);
+			KeyMapping.click(MagesLegacyClient.ABILITY_KEYS[0].getDefaultKey());
 		});
 		shotWhen("Mask", 0.5f, "fx_masked_tear");
 		step(20, false, c -> {
-			c.options.setPerspective(Perspective.FIRST_PERSON);
-			UUID me = c.player.getUuid();
+			c.options.setCameraType(CameraType.FIRST_PERSON);
+			UUID me = c.player.getUUID();
 			check("masked_zombie_face", onServer(c, s -> RaceState.get(s).data(me).masked.worn == Face.ZOMBIE));
 			check("masked_drawn_as_zombie", FaceVisuals.of(c.player.getId()) == Face.ZOMBIE);
-			c.options.setPerspective(Perspective.THIRD_PERSON_FRONT);
+			c.options.setCameraType(CameraType.THIRD_PERSON_FRONT);
 		});
 		step(10, false, c -> {
 			screenshot(c, "masked_zombie");
 			resetCooldowns(c);
 			commands(c, String.format(Locale.ROOT, "summon spider %d %d %d {NoAI:1b,Health:3f}", arena.getX(), arena.getY(), arena.getZ()));
-			c.options.setPerspective(Perspective.FIRST_PERSON);
+			c.options.setCameraType(CameraType.FIRST_PERSON);
 		});
-		step(10, false, c -> KeyBinding.onKeyPressed(MagesLegacyClient.ABILITY_KEYS[0].getDefaultKey()));
+		step(10, false, c -> KeyMapping.click(MagesLegacyClient.ABILITY_KEYS[0].getDefaultKey()));
 		step(30, false, c -> {
 			check("masked_drawn_as_spider", FaceVisuals.of(c.player.getId()) == Face.SPIDER);
-			c.options.setPerspective(Perspective.THIRD_PERSON_BACK);
+			c.options.setCameraType(CameraType.THIRD_PERSON_BACK);
 		});
 		step(10, false, c -> screenshot(c, "masked_spider"));
 		step(10, false, c -> {
-			c.options.setPerspective(Perspective.FIRST_PERSON);
+			c.options.setCameraType(CameraType.FIRST_PERSON);
 			// The HUD with the face's egg on V and Z
 			screenshot(c, "masked_hud");
 		});
@@ -995,10 +995,10 @@ public class HarnessClient implements ClientModInitializer {
 			resetCooldowns(c);
 			commands(c, "race resource @a 100", "kill @e[type=!player]", String.format(Locale.ROOT, "summon zombie %d %d %d {NoAI:1b}", arena.getX(), arena.getY(), arena.getZ()));
 			grant(c, Talents.GAL_THOUSAND);
-			tp(c, Vec3d.ofBottomCenter(arena).add(-5, 0, 0), Vec3d.ofBottomCenter(arena).add(0, 0.5, 0));
+			tp(c, Vec3.atBottomCenterOf(arena).add(-5, 0, 0), Vec3.atBottomCenterOf(arena).add(0, 0.5, 0));
 		});
 		step(4, false, c -> {
-			c.options.setPerspective(Perspective.THIRD_PERSON_BACK);
+			c.options.setCameraType(CameraType.THIRD_PERSON_BACK);
 			key(1);
 		});
 		shotWhen("Web", 0.35f, "fx_masked_web");
@@ -1012,14 +1012,14 @@ public class HarnessClient implements ClientModInitializer {
 		shotWhen("Sigil", 0.04f, "fx_masked_kin");
 		step(4, false, c -> {
 			commands(c, "race resource @a 100");
-			c.options.setPerspective(Perspective.THIRD_PERSON_FRONT);
+			c.options.setCameraType(CameraType.THIRD_PERSON_FRONT);
 			key(4);
 		});
 		shotWhen("Masks", 0.3f, "fx_masked_thousand");
-		step(5, false, c -> c.options.setPerspective(Perspective.FIRST_PERSON));
+		step(5, false, c -> c.options.setCameraType(CameraType.FIRST_PERSON));
 		// ---- Trial VFX libraries: the Kiss and the Charm in our renderer, in Photon and in Lodestone, same spot, same camera ----
 		step(10, false, c -> {
-			c.options.setPerspective(Perspective.FIRST_PERSON);
+			c.options.setCameraType(CameraType.FIRST_PERSON);
 			commands(c, "race set @a tempter", "race xp @a 20000", "kill @e[type=!player]", "time set 18000");
 		});
 		step(20, false, c -> {
@@ -1040,7 +1040,7 @@ public class HarnessClient implements ClientModInitializer {
 				}
 			});
 			step(6, false, c -> {
-				c.inGameHud.getChatHud().clear(false);
+				c.gui.getChat().clearMessages(false);
 				trialKiss(c, backend);
 			});
 			step(10, false, c -> screenshot(c, "trial_" + backend + "_kiss_a"));
@@ -1058,7 +1058,7 @@ public class HarnessClient implements ClientModInitializer {
 		}
 		step(10, false, c -> {
 			commands(c, "time set day", "kill @e[type=spider]");
-			c.options.setPerspective(Perspective.FIRST_PERSON);
+			c.options.setCameraType(CameraType.FIRST_PERSON);
 		});
 
 		step(20, false, this::finish);
@@ -1074,32 +1074,32 @@ public class HarnessClient implements ClientModInitializer {
 	}
 
 	/** Learns talents for the player straight in the data (the harness doesn't climb the tree for every crown). */
-	private static void grant(MinecraftClient client, String... talents) {
-		UUID me = client.player.getUuid();
+	private static void grant(Minecraft client, String... talents) {
+		UUID me = client.player.getUUID();
 		onServer(client, s -> {
 			RaceData data = RaceState.get(s).data(me);
 			data.talents.addAll(java.util.List.of(talents));
-			RacePackets.sync(s.getPlayerManager().getPlayer(me), data);
+			RacePackets.sync(s.getPlayerList().getPlayer(me), data);
 			return null;
 		});
 	}
 
 	/** The camera for the trial effects: the player off to one side, the spider in the left half of the view. */
-	private void trialCamera(MinecraftClient client) {
-		tp(client, Vec3d.ofBottomCenter(arena).add(-4, 0, 3), Vec3d.ofBottomCenter(arena).add(2, 1, 3));
-		client.options.setPerspective(Perspective.THIRD_PERSON_BACK);
+	private void trialCamera(Minecraft client) {
+		tp(client, Vec3.atBottomCenterOf(arena).add(-4, 0, 3), Vec3.atBottomCenterOf(arena).add(2, 1, 3));
+		client.options.setCameraType(CameraType.THIRD_PERSON_BACK);
 	}
 
 	/** The player turns to the trial's spider where it stands (on the server, so the ability sees it). */
-	private static void trialLook(MinecraftClient client) {
-		net.minecraft.entity.Entity target = trialTarget(client);
+	private static void trialLook(Minecraft client) {
+		net.minecraft.world.entity.Entity target = trialTarget(client);
 		if (target != null) {
-			tp(client, client.player.getPos(), target.getPos().add(0, 0.4, 0));
+			tp(client, client.player.position(), target.position().add(0, 0.4, 0));
 		}
 	}
 
-	private static void trialKiss(MinecraftClient client, String backend) {
-		net.minecraft.entity.Entity target = trialTarget(client);
+	private static void trialKiss(Minecraft client, String backend) {
+		net.minecraft.world.entity.Entity target = trialTarget(client);
 		if (target == null) {
 			return;
 		}
@@ -1113,8 +1113,8 @@ public class HarnessClient implements ClientModInitializer {
 		}
 	}
 
-	private static void trialCharm(MinecraftClient client, String backend, long tick) {
-		net.minecraft.entity.Entity target = trialTarget(client);
+	private static void trialCharm(Minecraft client, String backend, long tick) {
+		net.minecraft.world.entity.Entity target = trialTarget(client);
 		if (target == null) {
 			return;
 		}
@@ -1136,61 +1136,61 @@ public class HarnessClient implements ClientModInitializer {
 	}
 
 	/** The spider the trial effects are played on. */
-	private static net.minecraft.entity.Entity trialTarget(MinecraftClient client) {
-		return client.world.getEntitiesByClass(net.minecraft.entity.mob.SpiderEntity.class, client.player.getBoundingBox().expand(24), e -> e.isAlive())
+	private static net.minecraft.world.entity.Entity trialTarget(Minecraft client) {
+		return client.level.getEntitiesOfClass(net.minecraft.world.entity.monster.Spider.class, client.player.getBoundingBox().inflate(24), e -> e.isAlive())
 				.stream().findFirst().orElse(null);
 	}
 
 	private static void key(int slot) {
-		KeyBinding.onKeyPressed(MagesLegacyClient.ABILITY_KEYS[slot].getDefaultKey());
+		KeyMapping.click(MagesLegacyClient.ABILITY_KEYS[slot].getDefaultKey());
 	}
 
 	/** A 21x13 mycelium field at the spawn with 6 blocks of air above; returns the block above its centre. */
-	private static BlockPos prepareArena(ServerWorld world) {
-		BlockPos spawn = world.getSpawnPos();
+	private static BlockPos prepareArena(ServerLevel world) {
+		BlockPos spawn = world.getSharedSpawnPos();
 		// Heightmaps of unloaded chunks read as the bottom of the world: generate the chunk first
 		world.getChunk(spawn.getX() >> 4, spawn.getZ() >> 4);
-		BlockPos top = world.getTopPosition(Heightmap.Type.MOTION_BLOCKING_NO_LEAVES, spawn);
+		BlockPos top = world.getHeightmapPos(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, spawn);
 		for (int dx = -10; dx <= 10; dx++) {
 			for (int dz = -6; dz <= 6; dz++) {
-				world.setBlockState(top.add(dx, -1, dz), Blocks.MYCELIUM.getDefaultState());
-				world.setBlockState(top.add(dx, -2, dz), Blocks.DIRT.getDefaultState());
+				world.setBlockAndUpdate(top.offset(dx, -1, dz), Blocks.MYCELIUM.defaultBlockState());
+				world.setBlockAndUpdate(top.offset(dx, -2, dz), Blocks.DIRT.defaultBlockState());
 				for (int dy = 0; dy < 6; dy++) {
-					world.setBlockState(top.add(dx, dy, dz), Blocks.AIR.getDefaultState());
+					world.setBlockAndUpdate(top.offset(dx, dy, dz), Blocks.AIR.defaultBlockState());
 				}
 			}
 		}
-		world.setBlockState(top.add(-3, 0, 4), Blocks.RED_MUSHROOM.getDefaultState());
-		world.setBlockState(top.add(4, 0, 5), Blocks.BROWN_MUSHROOM.getDefaultState());
+		world.setBlockAndUpdate(top.offset(-3, 0, 4), Blocks.RED_MUSHROOM.defaultBlockState());
+		world.setBlockAndUpdate(top.offset(4, 0, 5), Blocks.BROWN_MUSHROOM.defaultBlockState());
 		return top;
 	}
 
 	/** A mob that stands still where it's put (no AI), for the scenario to aim at. */
-	private static void spawnStill(ServerWorld world, EntityType<? extends MobEntity> type, BlockPos at) {
-		MobEntity mob = type.create(world);
+	private static void spawnStill(ServerLevel world, EntityType<? extends Mob> type, BlockPos at) {
+		Mob mob = type.create(world);
 		if (mob != null) {
-			mob.refreshPositionAndAngles(at.getX() + 0.5, at.getY(), at.getZ() + 0.5, 0, 0);
-			mob.setAiDisabled(true);
-			world.spawnEntity(mob);
+			mob.moveTo(at.getX() + 0.5, at.getY(), at.getZ() + 0.5, 0, 0);
+			mob.setNoAi(true);
+			world.addFreshEntity(mob);
 		}
 	}
 
 	/** A real right click on the nearest wolf, the way a player would. */
-	private static void interactWolf(MinecraftClient client) {
-		WolfEntity wolf = client.world.getEntitiesByClass(WolfEntity.class, client.player.getBoundingBox().expand(6), w -> true)
+	private static void interactWolf(Minecraft client) {
+		Wolf wolf = client.level.getEntitiesOfClass(Wolf.class, client.player.getBoundingBox().inflate(6), w -> true)
 				.stream().findFirst().orElse(null);
 		if (wolf != null) {
-			client.interactionManager.interactEntity(client.player, wolf, Hand.MAIN_HAND);
+			client.gameMode.interact(client.player, wolf, InteractionHand.MAIN_HAND);
 		}
 	}
 
-	private static Race serverRace(MinecraftClient client) {
-		UUID me = client.player.getUuid();
+	private static Race serverRace(Minecraft client) {
+		UUID me = client.player.getUUID();
 		return onServer(client, s -> RaceState.get(s).data(me).race);
 	}
 
-	private static void resetCooldowns(MinecraftClient client) {
-		UUID me = client.player.getUuid();
+	private static void resetCooldowns(Minecraft client) {
+		UUID me = client.player.getUUID();
 		onServer(client, s -> {
 			RaceData data = RaceState.get(s).data(me);
 			data.readyAt.clear();
@@ -1198,15 +1198,15 @@ public class HarnessClient implements ClientModInitializer {
 		});
 	}
 
-	private static <T> T onServer(MinecraftClient client, Function<MinecraftServer, T> action) {
-		MinecraftServer server = client.getServer();
+	private static <T> T onServer(Minecraft client, Function<MinecraftServer, T> action) {
+		MinecraftServer server = client.getSingleplayerServer();
 		return server.submit(() -> action.apply(server)).join();
 	}
 
-	private static void commands(MinecraftClient client, String... commands) {
+	private static void commands(Minecraft client, String... commands) {
 		onServer(client, server -> {
 			for (String command : commands) {
-				server.getCommandManager().executeWithPrefix(server.getCommandSource(), command);
+				server.getCommands().performPrefixedCommand(server.createCommandSourceStack(), command);
 			}
 			return null;
 		});
@@ -1220,19 +1220,19 @@ public class HarnessClient implements ClientModInitializer {
 	 */
 	private void shotWhen(String effect, float progress, String name) {
 		// The chat would cover the ground in front: cleared a frame before the picture is taken
-		steps.add(new Step(1, false, c -> c.inGameHud.getChatHud().clear(false), c -> FxRenderer.progressOf(effect) >= progress));
+		steps.add(new Step(1, false, c -> c.gui.getChat().clearMessages(false), c -> FxRenderer.progressOf(effect) >= progress));
 		steps.add(new Step(2, false, c -> {
 			LOGGER.info("[harness] {} at {}", name, FxRenderer.describe());
 			screenshot(c, name);
 		}, null));
 	}
 
-	private void step(int waitAfter, boolean needsTerrain, Consumer<MinecraftClient> action) {
+	private void step(int waitAfter, boolean needsTerrain, Consumer<Minecraft> action) {
 		steps.add(new Step(waitAfter, needsTerrain, action, null));
 	}
 
-	private void tick(MinecraftClient client) {
-		if (client.player == null || client.world == null || client.getServer() == null || steps.isEmpty()) {
+	private void tick(Minecraft client) {
+		if (client.player == null || client.level == null || client.getSingleplayerServer() == null || steps.isEmpty()) {
 			return;
 		}
 		ticks++;
@@ -1243,7 +1243,7 @@ public class HarnessClient implements ClientModInitializer {
 		if (next.until() != null && !next.until().test(client) && ticks < nextStepTick + 100) {
 			return;
 		}
-		if (next.needsTerrain() && !client.worldRenderer.isTerrainRenderComplete() && ticks < nextStepTick + 400) {
+		if (next.needsTerrain() && !client.levelRenderer.hasRenderedAllChunks() && ticks < nextStepTick + 400) {
 			return;
 		}
 		steps.poll();
@@ -1257,37 +1257,37 @@ public class HarnessClient implements ClientModInitializer {
 	}
 
 	/** Teleports the player (server side) to {@code from}, looking at {@code at}. */
-	private static void tp(MinecraftClient client, Vec3d from, Vec3d at) {
-		Vec3d d = at.subtract(from.add(0, client.player.getStandingEyeHeight(), 0));
+	private static void tp(Minecraft client, Vec3 from, Vec3 at) {
+		Vec3 d = at.subtract(from.add(0, client.player.getEyeHeight(), 0));
 		float yaw = (float) Math.toDegrees(Math.atan2(-d.x, d.z));
 		float pitch = (float) -Math.toDegrees(Math.atan2(d.y, Math.sqrt(d.x * d.x + d.z * d.z)));
 		commands(client, String.format(Locale.ROOT, "tp @a %.2f %.2f %.2f %.1f %.1f", from.x, from.y, from.z, yaw, pitch));
 	}
 
-	private static void selectItem(MinecraftClient client, Item item) {
+	private static void selectItem(Minecraft client, Item item) {
 		for (int i = 0; i < 9; i++) {
-			if (client.player.getInventory().getStack(i).isOf(item)) {
-				client.player.getInventory().selectedSlot = i;
+			if (client.player.getInventory().getItem(i).is(item)) {
+				client.player.getInventory().selected = i;
 				return;
 			}
 		}
 	}
 
-	private void screenshot(MinecraftClient client, String name) {
-		ScreenshotRecorder.saveScreenshot(client.runDirectory, name + ".png", client.getFramebuffer(), message -> {});
+	private void screenshot(Minecraft client, String name) {
+		Screenshot.grab(client.gameDirectory, name + ".png", client.getMainRenderTarget(), message -> {});
 		LOGGER.info("[harness] screenshot {}.png", name);
 	}
 
-	private void finish(MinecraftClient client) {
+	private void finish(Minecraft client) {
 		boolean pass = !results.isEmpty() && results.stream().allMatch(line -> line.endsWith(": OK"));
 		results.add("RESULT " + (pass ? "PASS" : "FAIL"));
 		try {
-			Files.write(client.runDirectory.toPath().resolve("harness-result.txt"), results, StandardCharsets.UTF_8);
+			Files.write(client.gameDirectory.toPath().resolve("harness-result.txt"), results, StandardCharsets.UTF_8);
 		} catch (IOException e) {
 			LOGGER.error("[harness] could not write the result file", e);
 		}
 		LOGGER.info("[harness] {}", results.get(results.size() - 1));
-		client.scheduleStop();
+		client.stop();
 	}
 
 	private void check(String name, boolean ok) {

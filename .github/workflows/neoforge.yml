@@ -1,0 +1,31 @@
+name: NeoForge 1.21.1 port
+on:
+  push:
+    branches: ['port/neoforge-1.21.1']
+    paths-ignore: ['.github/workflows/migrate.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: neoforge-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  compile:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Compile native NeoForge sources
+        run: ./gradlew build --stacktrace -Pbuild_number=${{ github.run_number }}
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: neoforge-port-${{ github.run_number }}
+          path: |
+            build/libs/
+            build/reports/

@@ -16,7 +16,7 @@ public class GenWorldServer implements DedicatedServerModInitializer {
 		}
 		ServerLifecycleEvents.SERVER_STARTED.register(server -> {
 			LOGGER.info("[genworld] world created, stopping");
-			server.stop(false);
+			server.halt(false);
 		});
 	}
 }

@@ -32,70 +32,70 @@ import euf.mageslegacy.voidborn.Voidborn;
 import java.util.List;
 import java.util.UUID;
 import net.fabricmc.fabric.api.gametest.v1.FabricGameTest;
-import net.minecraft.advancement.Advancement;
-import net.minecraft.block.Blocks;
-import net.minecraft.block.JukeboxBlock;
-import net.minecraft.block.entity.AbstractFurnaceBlockEntity;
-import net.minecraft.entity.Entity;
-import net.minecraft.entity.EntityType;
-import net.minecraft.entity.EquipmentSlot;
-import net.minecraft.entity.ItemEntity;
-import net.minecraft.entity.effect.StatusEffectInstance;
-import net.minecraft.entity.effect.StatusEffects;
-import net.minecraft.entity.mob.MobEntity;
-import net.minecraft.entity.mob.SpiderEntity;
-import net.minecraft.entity.mob.ZombieEntity;
-import net.minecraft.entity.passive.BeeEntity;
-import net.minecraft.entity.passive.CatEntity;
-import net.minecraft.entity.passive.FoxEntity;
-import net.minecraft.entity.passive.GoatEntity;
-import net.minecraft.entity.passive.LlamaEntity;
-import net.minecraft.entity.passive.ParrotEntity;
-import net.minecraft.entity.passive.PigEntity;
-import net.minecraft.entity.passive.PolarBearEntity;
-import net.minecraft.entity.passive.RabbitEntity;
-import net.minecraft.entity.passive.WolfEntity;
-import net.minecraft.entity.projectile.ArrowEntity;
-import net.minecraft.item.ItemStack;
-import net.minecraft.item.Items;
-import net.minecraft.server.network.ServerPlayerEntity;
-import net.minecraft.server.world.ServerWorld;
-import net.minecraft.test.GameTest;
-import net.minecraft.test.GameTestException;
-import net.minecraft.test.TestContext;
-import net.minecraft.util.ActionResult;
-import net.minecraft.util.Hand;
-import net.minecraft.util.Identifier;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.Box;
-import net.minecraft.util.math.GlobalPos;
-import net.minecraft.util.math.Vec3d;
-import net.minecraft.world.GameMode;
+import net.minecraft.advancements.Advancement;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.GlobalPos;
+import net.minecraft.gametest.framework.GameTest;
+import net.minecraft.gametest.framework.GameTestAssertException;
+import net.minecraft.gametest.framework.GameTestHelper;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.InteractionHand;
+import net.minecraft.world.InteractionResult;
+import net.minecraft.world.effect.MobEffectInstance;
+import net.minecraft.world.effect.MobEffects;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.EquipmentSlot;
+import net.minecraft.world.entity.Mob;
+import net.minecraft.world.entity.animal.Bee;
+import net.minecraft.world.entity.animal.Cat;
+import net.minecraft.world.entity.animal.Fox;
+import net.minecraft.world.entity.animal.Parrot;
+import net.minecraft.world.entity.animal.Pig;
+import net.minecraft.world.entity.animal.PolarBear;
+import net.minecraft.world.entity.animal.Rabbit;
+import net.minecraft.world.entity.animal.Wolf;
+import net.minecraft.world.entity.animal.goat.Goat;
+import net.minecraft.world.entity.animal.horse.Llama;
+import net.minecraft.world.entity.item.ItemEntity;
+import net.minecraft.world.entity.monster.Spider;
+import net.minecraft.world.entity.monster.Zombie;
+import net.minecraft.world.entity.projectile.Arrow;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
+import net.minecraft.world.level.GameType;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.JukeboxBlock;
+import net.minecraft.world.level.block.entity.AbstractFurnaceBlockEntity;
+import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.Vec3;
 
 public class RaceGameTests implements FabricGameTest {
-	static ServerPlayerEntity mycelid(TestContext ctx, BlockPos at) {
-		ServerPlayerEntity player = (ServerPlayerEntity) ctx.createMockCreativeServerPlayerInWorld();
-		player.changeGameMode(GameMode.SURVIVAL);
-		player.refreshPositionAndAngles(at.getX() + 0.5, at.getY(), at.getZ() + 0.5, 0, 0);
+	static ServerPlayer mycelid(GameTestHelper ctx, BlockPos at) {
+		ServerPlayer player = (ServerPlayer) ctx.makeMockServerPlayerInLevel();
+		player.setGameMode(GameType.SURVIVAL);
+		player.moveTo(at.getX() + 0.5, at.getY(), at.getZ() + 0.5, 0, 0);
 		RaceState.of(player).reset(Race.MYCELID);
 		return player;
 	}
 
-	static void floor(ServerWorld world, BlockPos from, int sizeX, int sizeZ) {
+	static void floor(ServerLevel world, BlockPos from, int sizeX, int sizeZ) {
 		for (int x = 0; x < sizeX; x++) {
 			for (int z = 0; z < sizeZ; z++) {
-				world.setBlockState(from.add(x, -1, z), Blocks.STONE.getDefaultState());
+				world.setBlockAndUpdate(from.offset(x, -1, z), Blocks.STONE.defaultBlockState());
 			}
 		}
 	}
 
-	static void done(TestContext ctx, ServerPlayerEntity player) {
-		player.getServerWorld().removePlayer(player, Entity.RemovalReason.DISCARDED);
-		ctx.complete();
+	static void done(GameTestHelper ctx, ServerPlayer player) {
+		player.serverLevel().removePlayerImmediately(player, Entity.RemovalReason.DISCARDED);
+		ctx.succeed();
 	}
 
-	@GameTest(templateName = EMPTY_STRUCTURE)
-	public void dataSavesAndLevelsGrantPoints(TestContext ctx) {
+	@GameTest(template = EMPTY_STRUCTURE)
+	public void dataSavesAndLevelsGrantPoints(GameTestHelper ctx) {
 		RaceData data = new RaceData();
 		data.reset(Race.MYCELID);
 		data.addResource(42);
@@ -110,23 +110,23 @@ public class RaceGameTests implements FabricGameTest {
 		check(data.level == RaceData.MAX_LEVEL && data.totalPoints() == 60, "level 50 gives 60 points, got " + data.totalPoints());
 		data.addResource(500);
 		check(data.resource == RaceData.MAX_RESOURCE, "resource is capped at 100");
-		ctx.complete();
+		ctx.succeed();
 	}
 
-	@GameTest(templateName = EMPTY_STRUCTURE, batchId = "choose")
-	public void aRaceIsChosenOnce(TestContext ctx) {
-		ServerPlayerEntity player = (ServerPlayerEntity) ctx.createMockCreativeServerPlayerInWorld();
+	@GameTest(template = EMPTY_STRUCTURE, batch = "choose")
+	public void aRaceIsChosenOnce(GameTestHelper ctx) {
+		ServerPlayer player = (ServerPlayer) ctx.makeMockServerPlayerInLevel();
 		RaceData data = RaceState.of(player);
 		check(data.race == null, "a new player has no race");
 		check(RacePackets.choose(player, Race.MYCELID) && data.race == Race.MYCELID, "picking the Mycelids should work");
 		check(!RacePackets.choose(player, Race.MYCELID), "the choice is made once");
-		check(RaceState.get(ctx.getWorld().getServer()).data(player.getUuid()) == data, "the data lives in the saved state");
+		check(RaceState.get(ctx.getLevel().getServer()).data(player.getUUID()) == data, "the data lives in the saved state");
 		done(ctx, player);
 	}
 
-	@GameTest(templateName = EMPTY_STRUCTURE, batchId = "talents")
-	public void talentsNeedPointsPrerequisitesAndMilestones(TestContext ctx) {
-		ServerPlayerEntity player = mycelid(ctx, ctx.getAbsolutePos(new BlockPos(1, 2, 1)));
+	@GameTest(template = EMPTY_STRUCTURE, batch = "talents")
+	public void talentsNeedPointsPrerequisitesAndMilestones(GameTestHelper ctx) {
+		ServerPlayer player = mycelid(ctx, ctx.absolutePos(new BlockPos(1, 2, 1)));
 		RaceData data = RaceState.of(player);
 		check(Progression.unlock(player, data, Talents.SWARM_WIDE) == UnlockResult.NO_POINTS, "level 0 has no points");
 		Progression.addXp(player, data, 1500);
@@ -137,9 +137,9 @@ public class RaceGameTests implements FabricGameTest {
 		check(Progression.unlock(player, data, Talents.SWARM_POTENT) == UnlockResult.NEEDS_MILESTONE, "tier 2 waits for the Nether");
 		check(Progression.unlock(player, data, "nonsense") == UnlockResult.UNKNOWN, "unknown talents are refused");
 
-		Advancement nether = player.server.getAdvancementLoader().get(new Identifier("story/enter_the_nether"));
+		Advancement nether = player.server.getAdvancements().getAdvancement(new ResourceLocation("story/enter_the_nether"));
 		for (String criterion : nether.getCriteria().keySet()) {
-			player.getAdvancementTracker().grantCriterion(nether, criterion);
+			player.getAdvancements().award(nether, criterion);
 		}
 		check(data.level < 10 && Progression.openTiers(player) == 1, "the Nether alone isn't enough below level 10 (level " + data.level + ")");
 		Progression.addXp(player, data, 5000);
@@ -160,13 +160,13 @@ public class RaceGameTests implements FabricGameTest {
 		done(ctx, player);
 	}
 
-	@GameTest(templateName = EMPTY_STRUCTURE)
-	public void theTreeHasRoomForBuilds(TestContext ctx) {
+	@GameTest(template = EMPTY_STRUCTURE)
+	public void theTreeHasRoomForBuilds(GameTestHelper ctx) {
 		treeShape(Race.MYCELID);
 		treeShape(Race.SHEPHERD);
 		treeShape(Race.FROZEN);
 		treeShape(Race.BLOODKIN);
-		ctx.complete();
+		ctx.succeed();
 	}
 
 	private static void treeShape(Race race) {
@@ -191,37 +191,37 @@ public class RaceGameTests implements FabricGameTest {
 		}
 	}
 
-	@GameTest(templateName = EMPTY_STRUCTURE, batchId = "cloud_talents", tickLimit = 100)
-	public void cloudTalentsWeakenMonstersAndMendPlayers(TestContext ctx) {
-		ServerWorld world = ctx.getWorld();
-		BlockPos at = ctx.getAbsolutePos(new BlockPos(2, 2, 2));
-		floor(world, at.add(-2, 0, -2), 5, 5);
-		ServerPlayerEntity player = mycelid(ctx, at);
-		ZombieEntity zombie = EntityType.ZOMBIE.create(world);
-		zombie.refreshPositionAndAngles(at.getX() + 2.5, at.getY(), at.getZ() + 0.5, 0, 0);
-		zombie.setAiDisabled(true);
-		world.spawnEntity(zombie);
+	@GameTest(template = EMPTY_STRUCTURE, batch = "cloud_talents", timeoutTicks = 100)
+	public void cloudTalentsWeakenMonstersAndMendPlayers(GameTestHelper ctx) {
+		ServerLevel world = ctx.getLevel();
+		BlockPos at = ctx.absolutePos(new BlockPos(2, 2, 2));
+		floor(world, at.offset(-2, 0, -2), 5, 5);
+		ServerPlayer player = mycelid(ctx, at);
+		Zombie zombie = EntityType.ZOMBIE.create(world);
+		zombie.moveTo(at.getX() + 2.5, at.getY(), at.getZ() + 0.5, 0, 0);
+		zombie.setNoAi(true);
+		world.addFreshEntity(zombie);
 		RaceData data = RaceState.of(player);
 		data.talents.add(Talents.SWARM_WEAKNESS);
 		data.talents.add(Talents.SWARM_MENDING);
 		data.addResource(30);
 		check(Mycelid.sporeCloud(player, data) == AbilityResult.OK, "the cloud should rise");
-		ctx.waitAndRun(25, () -> {
-			StatusEffectInstance weakness = zombie.getStatusEffect(StatusEffects.WEAKNESS);
+		ctx.runAfterDelay(25, () -> {
+			MobEffectInstance weakness = zombie.getEffect(MobEffects.WEAKNESS);
 			check(weakness != null && weakness.getAmplifier() == 1, "Rot of Strength: the zombie gets Weakness II");
-			StatusEffectInstance regen = player.getStatusEffect(StatusEffects.REGENERATION);
+			MobEffectInstance regen = player.getEffect(MobEffects.REGENERATION);
 			check(regen != null && regen.getAmplifier() == 1, "Mending Mist: the player gets Regeneration II");
 			zombie.discard();
 			done(ctx, player);
 		});
 	}
 
-	@GameTest(templateName = EMPTY_STRUCTURE, batchId = "flesh_talents", tickLimit = 120)
-	public void bodyTalentsChangeDamageHealthAndCosts(TestContext ctx) {
-		ServerWorld world = ctx.getWorld();
-		BlockPos at = ctx.getAbsolutePos(new BlockPos(2, 2, 2));
-		floor(world, at.add(-2, 0, -2), 5, 5);
-		ServerPlayerEntity player = mycelid(ctx, at);
+	@GameTest(template = EMPTY_STRUCTURE, batch = "flesh_talents", timeoutTicks = 120)
+	public void bodyTalentsChangeDamageHealthAndCosts(GameTestHelper ctx) {
+		ServerLevel world = ctx.getLevel();
+		BlockPos at = ctx.absolutePos(new BlockPos(2, 2, 2));
+		floor(world, at.offset(-2, 0, -2), 5, 5);
+		ServerPlayer player = mycelid(ctx, at);
 		RaceData data = RaceState.of(player);
 		check(Mycelid.jumpCost(data) == 15, "a plain jump costs 15");
 		data.talents.add(Talents.NET_CHEAP);
@@ -230,16 +230,16 @@ public class RaceGameTests implements FabricGameTest {
 		data.talents.add(Talents.NET_LIGHT_STEP);
 		data.talents.add(Talents.FLESH_FIREPROOF);
 		// Spawn protection of new players lasts 3 seconds
-		ctx.waitAndRun(70, () -> {
+		ctx.runAfterDelay(70, () -> {
 			Mycelid.tickSecond(player, data);
 			check(Math.abs(player.getMaxHealth() - 24) < 0.01f, "Dense Body: 24 max health, got " + player.getMaxHealth());
 			player.setHealth(20);
-			player.timeUntilRegen = 0;
-			player.damage(world.getDamageSources().fall(), 4);
+			player.invulnerableTime = 0;
+			player.hurt(world.damageSources().fall(), 4);
 			check(Math.abs(player.getHealth() - 18) < 0.01f, "Soft Step halves the fall: 20 - 2 = 18, got " + player.getHealth());
 			player.setHealth(20);
-			player.timeUntilRegen = 0;
-			player.damage(world.getDamageSources().inFire(), 4);
+			player.invulnerableTime = 0;
+			player.hurt(world.damageSources().inFire(), 4);
 			check(Math.abs(player.getHealth() - 15.4f) < 0.01f, "Damp Flesh: fire 1.15x, 20 - 4.6 = 15.4, got " + player.getHealth());
 			Mycelid.removeCapArmor(player);
 			check(Math.abs(player.getMaxHealth() - 20) < 0.01f, "the bonus health goes with the race");
@@ -247,37 +247,37 @@ public class RaceGameTests implements FabricGameTest {
 		});
 	}
 
-	@GameTest(templateName = EMPTY_STRUCTURE, batchId = "rebirth", tickLimit = 120)
-	public void rebirthSproutsAtTheNearestNode(TestContext ctx) {
-		ServerWorld world = ctx.getWorld();
-		BlockPos at = ctx.getAbsolutePos(new BlockPos(1, 2, 1));
-		floor(world, at.add(-1, 0, -1), 8, 3);
-		ServerPlayerEntity player = mycelid(ctx, at);
+	@GameTest(template = EMPTY_STRUCTURE, batch = "rebirth", timeoutTicks = 120)
+	public void rebirthSproutsAtTheNearestNode(GameTestHelper ctx) {
+		ServerLevel world = ctx.getLevel();
+		BlockPos at = ctx.absolutePos(new BlockPos(1, 2, 1));
+		floor(world, at.offset(-1, 0, -1), 8, 3);
+		ServerPlayer player = mycelid(ctx, at);
 		RaceData data = RaceState.of(player);
-		BlockPos node = at.add(5, 0, 0);
-		Mycelid.placeNodeAt(world, node, player.getUuid(), 3);
+		BlockPos node = at.offset(5, 0, 0);
+		Mycelid.placeNodeAt(world, node, player.getUUID(), 3);
 		data.talents.add(Talents.FLESH_REBIRTH);
-		ctx.waitAndRun(70, () -> {
-			player.timeUntilRegen = 0;
-			player.damage(world.getDamageSources().generic(), 1000);
+		ctx.runAfterDelay(70, () -> {
+			player.invulnerableTime = 0;
+			player.hurt(world.damageSources().generic(), 1000);
 			check(player.isAlive(), "Rebirth: the killing blow does not kill");
 			check(Math.abs(player.getHealth() - player.getMaxHealth() / 2) < 0.01f, "half health after rebirth, got " + player.getHealth());
-			check(player.getBlockPos().isWithinDistance(node.up(), 1.5), "sprouted at the node, is at " + player.getBlockPos());
+			check(player.blockPosition().closerThan(node.above(), 1.5), "sprouted at the node, is at " + player.blockPosition());
 			check(Mycelid.allowDeath(player), "once in 20 minutes: a second killing blow right away is a real death");
 			world.removeBlock(node, false);
 			done(ctx, player);
 		});
 	}
 
-	@GameTest(templateName = EMPTY_STRUCTURE, batchId = "carpet", tickLimit = 100)
-	public void theCarpetIsMyceliumAndTheBloomBurstsTheCrowd(TestContext ctx) {
-		ServerWorld world = ctx.getWorld();
-		BlockPos at = ctx.getAbsolutePos(new BlockPos(4, 2, 4));
-		floor(world, at.add(-4, 0, -4), 9, 9);
-		ServerPlayerEntity player = mycelid(ctx, at);
+	@GameTest(template = EMPTY_STRUCTURE, batch = "carpet", timeoutTicks = 100)
+	public void theCarpetIsMyceliumAndTheBloomBurstsTheCrowd(GameTestHelper ctx) {
+		ServerLevel world = ctx.getLevel();
+		BlockPos at = ctx.absolutePos(new BlockPos(4, 2, 4));
+		floor(world, at.offset(-4, 0, -4), 9, 9);
+		ServerPlayer player = mycelid(ctx, at);
 		RaceData data = RaceState.of(player);
 		data.addResource(100);
-		ZombieEntity zombie = beast(ctx, EntityType.ZOMBIE, at.add(3, 0, 0));
+		Zombie zombie = beast(ctx, EntityType.ZOMBIE, at.offset(3, 0, 0));
 		// The carpet: the ground around counts as mycelium, and holds the monster on it
 		check(Mycelid.use(player, data, 3) == AbilityResult.OK, "the carpet spreads");
 		check(Mycelid.onMycelium(player) && Mycelid.onCarpet(zombie), "the Mycelid stands on mycelium, the zombie on the carpet");
@@ -286,83 +286,83 @@ public class RaceGameTests implements FabricGameTest {
 		check(Mycelid.use(player, data, 4) == AbilityResult.HINTED, "without the crown Alt only says which talent opens it");
 		data.talents.add(Talents.SWARM_BLOOM);
 		data.addResource(100);
-		check(Mycelid.use(player, data, 4) == AbilityResult.OK && zombie.hasStatusEffect(StatusEffects.GLOWING), "the bloom infects the zombie");
+		check(Mycelid.use(player, data, 4) == AbilityResult.OK && zombie.hasEffect(MobEffects.GLOWING), "the bloom infects the zombie");
 		int clouds = Mycelid.activeClouds();
 		zombie.kill();
 		check(Mycelid.activeClouds() == clouds + 1, "the infected zombie bursts into a spore cloud");
 		done(ctx, player);
 	}
 
-	@GameTest(templateName = EMPTY_STRUCTURE, batchId = "scroll")
-	public void theScrollOfOblivionGivesEveryPointBack(TestContext ctx) {
-		ServerPlayerEntity player = mycelid(ctx, ctx.getAbsolutePos(new BlockPos(1, 2, 1)));
+	@GameTest(template = EMPTY_STRUCTURE, batch = "scroll")
+	public void theScrollOfOblivionGivesEveryPointBack(GameTestHelper ctx) {
+		ServerPlayer player = mycelid(ctx, ctx.absolutePos(new BlockPos(1, 2, 1)));
 		RaceData data = RaceState.of(player);
 		data.addXp(5000);
 		int level = data.level;
 		data.talents.add(Talents.SWARM_WIDE);
 		data.talents.add(Talents.FLESH_HEARTY);
 		check(data.freePoints() < data.totalPoints(), "some points spent first");
-		player.setStackInHand(Hand.MAIN_HAND, new ItemStack(MagesLegacy.OBLIVION_SCROLL, 2));
-		check(MagesLegacy.OBLIVION_SCROLL.use(ctx.getWorld(), player, Hand.MAIN_HAND).getResult().isAccepted(), "the scroll is read");
+		player.setItemInHand(InteractionHand.MAIN_HAND, new ItemStack(MagesLegacy.OBLIVION_SCROLL, 2));
+		check(MagesLegacy.OBLIVION_SCROLL.use(ctx.getLevel(), player, InteractionHand.MAIN_HAND).getResult().isAccepted(), "the scroll is read");
 		check(data.talents.isEmpty() && data.freePoints() == data.totalPoints(), "every talent forgotten, every point back");
 		check(data.level == level && data.race == Race.MYCELID, "the race and its level stay");
-		check(player.getMainHandStack().getCount() == 1, "one scroll used up");
-		check(!MagesLegacy.OBLIVION_SCROLL.use(ctx.getWorld(), player, Hand.MAIN_HAND).getResult().isAccepted()
-				&& player.getMainHandStack().getCount() == 1, "nothing to forget: the scroll stays");
+		check(player.getMainHandItem().getCount() == 1, "one scroll used up");
+		check(!MagesLegacy.OBLIVION_SCROLL.use(ctx.getLevel(), player, InteractionHand.MAIN_HAND).getResult().isAccepted()
+				&& player.getMainHandItem().getCount() == 1, "nothing to forget: the scroll stays");
 		done(ctx, player);
 	}
 
-	@GameTest(templateName = EMPTY_STRUCTURE, batchId = "diet")
-	public void mushroomsGiveSporesAndOneTasteAtATime(TestContext ctx) {
-		ServerPlayerEntity player = mycelid(ctx, ctx.getAbsolutePos(new BlockPos(1, 2, 1)));
+	@GameTest(template = EMPTY_STRUCTURE, batch = "diet")
+	public void mushroomsGiveSporesAndOneTasteAtATime(GameTestHelper ctx) {
+		ServerPlayer player = mycelid(ctx, ctx.absolutePos(new BlockPos(1, 2, 1)));
 		RaceData data = RaceState.of(player);
-		player.getHungerManager().setFoodLevel(10);
+		player.getFoodData().setFoodLevel(10);
 		ItemStack red = new ItemStack(Items.RED_MUSHROOM, 3);
 		check(Mycelid.eat(player, data, red), "a Mycelid eats a raw red mushroom");
-		check(red.getCount() == 2 && player.getHungerManager().getFoodLevel() == 12, "one mushroom eaten, +2 food");
-		check((int) data.resource == 10 && player.hasStatusEffect(StatusEffects.STRENGTH), "spores and the strength taste");
+		check(red.getCount() == 2 && player.getFoodData().getFoodLevel() == 12, "one mushroom eaten, +2 food");
+		check((int) data.resource == 10 && player.hasEffect(MobEffects.DAMAGE_BOOST), "spores and the strength taste");
 		check(!Mycelid.eat(player, data, red), "a short pause between mushrooms");
 		ItemStack brown = new ItemStack(Items.BROWN_MUSHROOM);
 		check(Mycelid.eat(player, data, brown), "a brown mushroom next");
-		check(player.hasStatusEffect(StatusEffects.RESISTANCE) && !player.hasStatusEffect(StatusEffects.STRENGTH),
+		check(player.hasEffect(MobEffects.DAMAGE_RESISTANCE) && !player.hasEffect(MobEffects.DAMAGE_BOOST),
 				"only one taste at a time: the older one fades");
 
 		// The same taste comes back only after its aftertaste: the mushroom still feeds, but gives no strength
-		player.getItemCooldownManager().remove(Items.RED_MUSHROOM);
+		player.getCooldowns().removeCooldown(Items.RED_MUSHROOM);
 		float sporesRed = data.resource;
 		check(Mycelid.eat(player, data, red), "red again is still food");
-		check(data.resource > sporesRed && !player.hasStatusEffect(StatusEffects.STRENGTH), "but the strength taste waits for its aftertaste");
+		check(data.resource > sporesRed && !player.hasEffect(MobEffects.DAMAGE_BOOST), "but the strength taste waits for its aftertaste");
 
 		data.talents.add(Talents.FLESH_TWO_TASTES);
 		check(Mycelid.eat(player, data, new ItemStack(Items.WARPED_FUNGUS)), "a warped fungus");
-		check(player.hasStatusEffect(StatusEffects.RESISTANCE) && player.hasStatusEffect(StatusEffects.SPEED), "two tastes with the talent");
-		check(player.getStatusEffect(StatusEffects.SPEED).getDuration() <= 900, "a taste lasts 45 seconds");
+		check(player.hasEffect(MobEffects.DAMAGE_RESISTANCE) && player.hasEffect(MobEffects.MOVEMENT_SPEED), "two tastes with the talent");
+		check(player.getEffect(MobEffects.MOVEMENT_SPEED).getDuration() <= 900, "a taste lasts 45 seconds");
 
 		// Meat feeds a Mycelid half as well (8 hunger -> 4); goes through the eatFood mixin
-		player.getHungerManager().setFoodLevel(4);
-		player.eatFood(ctx.getWorld(), new ItemStack(Items.COOKED_BEEF));
-		check(player.getHungerManager().getFoodLevel() == 8, "steak should give 4 food to a Mycelid, food is " + player.getHungerManager().getFoodLevel());
+		player.getFoodData().setFoodLevel(4);
+		player.eat(ctx.getLevel(), new ItemStack(Items.COOKED_BEEF));
+		check(player.getFoodData().getFoodLevel() == 8, "steak should give 4 food to a Mycelid, food is " + player.getFoodData().getFoodLevel());
 		float sporesBefore = data.resource;
-		player.eatFood(ctx.getWorld(), new ItemStack(Items.MUSHROOM_STEW));
+		player.eat(ctx.getLevel(), new ItemStack(Items.MUSHROOM_STEW));
 		check(data.resource >= sporesBefore + 14, "a mushroom stew feeds the spores");
 		done(ctx, player);
 	}
 
-	@GameTest(templateName = EMPTY_STRUCTURE, batchId = "jump", tickLimit = 200)
-	public void sporeJumpSproutsWhereYouLook(TestContext ctx) {
-		ServerWorld world = ctx.getWorld();
-		BlockPos start = ctx.getAbsolutePos(new BlockPos(1, 2, 0));
-		floor(world, start.add(-1, 0, 0), 3, 30);
-		ServerPlayerEntity player = mycelid(ctx, start);
+	@GameTest(template = EMPTY_STRUCTURE, batch = "jump", timeoutTicks = 200)
+	public void sporeJumpSproutsWhereYouLook(GameTestHelper ctx) {
+		ServerLevel world = ctx.getLevel();
+		BlockPos start = ctx.absolutePos(new BlockPos(1, 2, 0));
+		floor(world, start.offset(-1, 0, 0), 3, 30);
+		ServerPlayer player = mycelid(ctx, start);
 		// Yaw 0 looks south (+Z), a little down so the spore lands on the floor
-		player.refreshPositionAndAngles(start.getX() + 0.5, start.getY(), start.getZ() + 0.5, 0, 25);
+		player.moveTo(start.getX() + 0.5, start.getY(), start.getZ() + 0.5, 0, 25);
 		RaceData data = RaceState.of(player);
 		data.addResource(40);
-		Vec3d from = player.getPos();
+		Vec3 from = player.position();
 		check(Mycelid.sporeJump(player, data) == AbilityResult.OK, "the jump should start");
 		check((int) data.resource == 25, "a jump costs 15 spores");
 		check(Mycelid.sporeJump(player, data) == AbilityResult.COOLDOWN, "no second jump right away");
-		ctx.waitAndRun(Mycelid.JUMP_DELAY + 3, () -> {
+		ctx.runAfterDelay(Mycelid.JUMP_DELAY + 3, () -> {
 			double moved = player.getPos().subtract(from).horizontalLength();
 			check(moved > 2 && moved <= 16.6, "the player should sprout up to 16 blocks ahead, moved " + moved);
 			check(player.getZ() > from.z, "forward is south, now at " + player.getPos());
@@ -395,112 +395,112 @@ public class RaceGameTests implements FabricGameTest {
 		});
 	}
 
-	@GameTest(templateName = EMPTY_STRUCTURE, batchId = "cloud", tickLimit = 100)
-	public void sporeCloudChokesMonstersAndHealsPlayers(TestContext ctx) {
-		ServerWorld world = ctx.getWorld();
-		BlockPos at = ctx.getAbsolutePos(new BlockPos(2, 2, 2));
-		floor(world, at.add(-2, 0, -2), 5, 5);
-		ServerPlayerEntity player = mycelid(ctx, at);
-		ZombieEntity zombie = EntityType.ZOMBIE.create(world);
-		zombie.refreshPositionAndAngles(at.getX() + 2.5, at.getY(), at.getZ() + 0.5, 0, 0);
-		zombie.setAiDisabled(true);
-		world.spawnEntity(zombie);
+	@GameTest(template = EMPTY_STRUCTURE, batch = "cloud", timeoutTicks = 100)
+	public void sporeCloudChokesMonstersAndHealsPlayers(GameTestHelper ctx) {
+		ServerLevel world = ctx.getLevel();
+		BlockPos at = ctx.absolutePos(new BlockPos(2, 2, 2));
+		floor(world, at.offset(-2, 0, -2), 5, 5);
+		ServerPlayer player = mycelid(ctx, at);
+		Zombie zombie = EntityType.ZOMBIE.create(world);
+		zombie.moveTo(at.getX() + 2.5, at.getY(), at.getZ() + 0.5, 0, 0);
+		zombie.setNoAi(true);
+		world.addFreshEntity(zombie);
 		RaceData data = RaceState.of(player);
 		data.addResource(30);
 		check(Mycelid.sporeCloud(player, data) == AbilityResult.OK, "the cloud should rise");
 		check(data.resource < 1, "a cloud costs 30 spores");
 		check(Mycelid.sporeCloud(player, data) == AbilityResult.COOLDOWN, "one cloud at a time");
-		ctx.waitAndRun(25, () -> {
-			check(zombie.hasStatusEffect(StatusEffects.BLINDNESS) && zombie.hasStatusEffect(StatusEffects.WITHER),
+		ctx.runAfterDelay(25, () -> {
+			check(zombie.hasEffect(MobEffects.BLINDNESS) && zombie.hasEffect(MobEffects.WITHER),
 					"the zombie goes blind and rots (the undead are immune to poison)");
-			check(player.hasStatusEffect(StatusEffects.REGENERATION), "the Mycelid breathes them in and heals");
+			check(player.hasEffect(MobEffects.REGENERATION), "the Mycelid breathes them in and heals");
 			zombie.discard();
 			done(ctx, player);
 		});
 	}
 
-	@GameTest(templateName = EMPTY_STRUCTURE, batchId = "dark", tickLimit = 200)
-	public void darknessFeedsAndFireBurns(TestContext ctx) {
-		ServerWorld world = ctx.getWorld();
-		BlockPos at = ctx.getAbsolutePos(new BlockPos(2, 2, 2));
+	@GameTest(template = EMPTY_STRUCTURE, batch = "dark", timeoutTicks = 200)
+	public void darknessFeedsAndFireBurns(GameTestHelper ctx) {
+		ServerLevel world = ctx.getLevel();
+		BlockPos at = ctx.absolutePos(new BlockPos(2, 2, 2));
 		// A closed stone box: no light gets in
 		for (int x = -1; x <= 1; x++) {
 			for (int y = -1; y <= 2; y++) {
 				for (int z = -1; z <= 1; z++) {
 					if (x != 0 || z != 0 || y == -1 || y == 2) {
-						world.setBlockState(at.add(x, y, z), Blocks.STONE.getDefaultState());
+						world.setBlockAndUpdate(at.offset(x, y, z), Blocks.STONE.defaultBlockState());
 					}
 				}
 			}
 		}
-		world.setBlockState(at.down(), Blocks.MYCELIUM.getDefaultState());
-		ServerPlayerEntity player = mycelid(ctx, at);
+		world.setBlockAndUpdate(at.below(), Blocks.MYCELIUM.defaultBlockState());
+		ServerPlayer player = mycelid(ctx, at);
 		RaceData data = RaceState.of(player);
-		ServerPlayerEntity human = (ServerPlayerEntity) ctx.createMockCreativeServerPlayerInWorld();
-		human.changeGameMode(GameMode.SURVIVAL);
+		ServerPlayer human = (ServerPlayer) ctx.makeMockServerPlayerInLevel();
+		human.setGameMode(GameType.SURVIVAL);
 		// Wait out the light update in the box and the 3 s of spawn protection new players get
-		ctx.waitAndRun(70, () -> {
+		ctx.runAfterDelay(70, () -> {
 			check(Mycelid.inDark(player) && Mycelid.onMycelium(player), "inside a box on mycelium it is dark");
 			float before = data.resource;
 			Mycelid.tickSecond(player, data);
-			check(player.hasStatusEffect(StatusEffects.NIGHT_VISION) && player.hasStatusEffect(StatusEffects.REGENERATION),
+			check(player.hasEffect(MobEffects.NIGHT_VISION) && player.hasEffect(MobEffects.REGENERATION),
 					"night vision and regeneration in the dark");
 			check(Math.abs(data.resource - before - 2.0f) < 0.01f, "0.5 + 0.5 dark + 1 mycelium = 2 spores a second, got " + (data.resource - before));
 
 			player.setHealth(20);
-			player.timeUntilRegen = 0;
-			player.damage(world.getDamageSources().inFire(), 4);
+			player.invulnerableTime = 0;
+			player.hurt(world.damageSources().inFire(), 4);
 			check(Math.abs(player.getHealth() - 14) < 0.01f, "fire hurts a Mycelid 1.5x: 20 - 6 = 14, got " + player.getHealth());
 			human.setHealth(20);
-			human.damage(world.getDamageSources().inFire(), 4);
+			human.hurt(world.damageSources().inFire(), 4);
 			check(Math.abs(human.getHealth() - 16) < 0.01f, "a player without a race takes plain fire damage, got " + human.getHealth());
-			world.removePlayer(human, Entity.RemovalReason.DISCARDED);
+			world.removePlayerImmediately(human, Entity.RemovalReason.DISCARDED);
 			done(ctx, player);
 		});
 	}
 
-	@GameTest(templateName = EMPTY_STRUCTURE, batchId = "nodes")
-	public void nodesFormANetworkAnyoneCanTravel(TestContext ctx) {
-		ServerWorld world = ctx.getWorld();
-		BlockPos base = ctx.getAbsolutePos(new BlockPos(0, 2, 0));
+	@GameTest(template = EMPTY_STRUCTURE, batch = "nodes")
+	public void nodesFormANetworkAnyoneCanTravel(GameTestHelper ctx) {
+		ServerLevel world = ctx.getLevel();
+		BlockPos base = ctx.absolutePos(new BlockPos(0, 2, 0));
 		floor(world, base, 12, 3);
-		ServerPlayerEntity owner = mycelid(ctx, base);
-		List<BlockPos> spots = List.of(base, base.add(3, 0, 0), base.add(6, 0, 0), base.add(9, 0, 0));
+		ServerPlayer owner = mycelid(ctx, base);
+		List<BlockPos> spots = List.of(base, base.offset(3, 0, 0), base.offset(6, 0, 0), base.offset(9, 0, 0));
 		for (BlockPos spot : spots) {
-			Mycelid.placeNodeAt(world, spot, owner.getUuid(), 3);
+			Mycelid.placeNodeAt(world, spot, owner.getUUID(), 3);
 		}
 		RaceState state = RaceState.get(world.getServer());
-		check(!world.getBlockState(spots.get(0)).isOf(MagesLegacy.MYCELIUM_NODE), "past the limit the oldest node withers");
-		check(state.nodes(owner.getUuid()).size() == 3, "three nodes in the network");
+		check(!world.getBlockState(spots.get(0)).is(MagesLegacy.MYCELIUM_NODE), "past the limit the oldest node withers");
+		check(state.nodes(owner.getUUID()).size() == 3, "three nodes in the network");
 
 		// A stranger uses the network: from node 2 to node 3
-		ServerPlayerEntity guest = (ServerPlayerEntity) ctx.createMockCreativeServerPlayerInWorld();
-		guest.refreshPositionAndAngles(spots.get(1).getX() + 1.5, spots.get(1).getY(), spots.get(1).getZ() + 1.5, 0, 0);
+		ServerPlayer guest = (ServerPlayer) ctx.makeMockServerPlayerInLevel();
+		guest.moveTo(spots.get(1).getX() + 1.5, spots.get(1).getY(), spots.get(1).getZ() + 1.5, 0, 0);
 		check(Mycelid.travel(guest, spots.get(1)), "travel through a node");
-		check(guest.getBlockPos().isWithinDistance(spots.get(2), 1.5), "the guest should come out at the next node, is at " + guest.getBlockPos());
+		check(guest.blockPosition().closerThan(spots.get(2), 1.5), "the guest should come out at the next node, is at " + guest.blockPosition());
 
-		world.breakBlock(spots.get(2), false);
-		check(!state.nodes(owner.getUuid()).contains(GlobalPos.create(world.getRegistryKey(), spots.get(2))), "a broken node leaves the network");
-		check(state.nodeOwner(world.getRegistryKey(), spots.get(3)).orElse(null).equals(owner.getUuid()), "nodes know their owner");
-		world.removePlayer(guest, Entity.RemovalReason.DISCARDED);
+		world.destroyBlock(spots.get(2), false);
+		check(!state.nodes(owner.getUUID()).contains(GlobalPos.of(world.dimension(), spots.get(2))), "a broken node leaves the network");
+		check(state.nodeOwner(world.dimension(), spots.get(3)).orElse(null).equals(owner.getUUID()), "nodes know their owner");
+		world.removePlayerImmediately(guest, Entity.RemovalReason.DISCARDED);
 		for (BlockPos spot : spots) {
 			world.removeBlock(spot, false);
 		}
 		done(ctx, owner);
 	}
 
-	@GameTest(templateName = EMPTY_STRUCTURE, batchId = "node_farm")
-	public void walkingBetweenNodesFarmsNothing(TestContext ctx) {
-		ServerWorld world = ctx.getWorld();
-		BlockPos base = ctx.getAbsolutePos(new BlockPos(0, 2, 0));
+	@GameTest(template = EMPTY_STRUCTURE, batch = "node_farm")
+	public void walkingBetweenNodesFarmsNothing(GameTestHelper ctx) {
+		ServerLevel world = ctx.getLevel();
+		BlockPos base = ctx.absolutePos(new BlockPos(0, 2, 0));
 		floor(world, base, 8, 3);
-		ServerPlayerEntity player = mycelid(ctx, base);
+		ServerPlayer player = mycelid(ctx, base);
 		RaceData data = RaceState.of(player);
 		data.talents.add(Talents.NET_SHARED);
 		BlockPos a = base;
-		BlockPos b = base.add(5, 0, 0);
-		Mycelid.placeNodeAt(world, a, player.getUuid(), 3);
-		Mycelid.placeNodeAt(world, b, player.getUuid(), 3);
+		BlockPos b = base.offset(5, 0, 0);
+		Mycelid.placeNodeAt(world, a, player.getUUID(), 3);
+		Mycelid.placeNodeAt(world, b, player.getUUID(), 3);
 		int xp = data.xp;
 		check(Mycelid.travel(player, a) && Mycelid.travel(player, b) && Mycelid.travel(player, a), "back and forth works");
 		check(data.xp == xp, "travelling gives no race experience: " + xp + " -> " + data.xp);
@@ -512,23 +512,23 @@ public class RaceGameTests implements FabricGameTest {
 
 	// ---- Shepherds ----
 
-	static ServerPlayerEntity shepherd(TestContext ctx, BlockPos at) {
-		ServerPlayerEntity player = (ServerPlayerEntity) ctx.createMockCreativeServerPlayerInWorld();
-		player.changeGameMode(GameMode.SURVIVAL);
-		player.refreshPositionAndAngles(at.getX() + 0.5, at.getY(), at.getZ() + 0.5, 0, 0);
+	static ServerPlayer shepherd(GameTestHelper ctx, BlockPos at) {
+		ServerPlayer player = (ServerPlayer) ctx.makeMockServerPlayerInLevel();
+		player.setGameMode(GameType.SURVIVAL);
+		player.moveTo(at.getX() + 0.5, at.getY(), at.getZ() + 0.5, 0, 0);
 		RaceState.of(player).reset(Race.SHEPHERD);
 		return player;
 	}
 
-	static void learn(ServerPlayerEntity player, RaceData data, EchoType type) {
+	static void learn(ServerPlayer player, RaceData data, EchoType type) {
 		for (int i = 0; i < type.kills(); i++) {
 			Shepherd.countKill(player, data, type);
 		}
 	}
 
-	@GameTest(templateName = EMPTY_STRUCTURE, batchId = "echo_learn")
-	public void echoesAreLearnedFromKills(TestContext ctx) {
-		ServerPlayerEntity player = shepherd(ctx, ctx.getAbsolutePos(new BlockPos(1, 2, 1)));
+	@GameTest(template = EMPTY_STRUCTURE, batch = "echo_learn")
+	public void echoesAreLearnedFromKills(GameTestHelper ctx) {
+		ServerPlayer player = shepherd(ctx, ctx.absolutePos(new BlockPos(1, 2, 1)));
 		RaceData data = RaceState.of(player);
 		EchoType zombie = EchoType.of(EntityType.ZOMBIE).orElseThrow();
 		for (int i = 0; i < zombie.kills() - 1; i++) {
@@ -546,280 +546,280 @@ public class RaceGameTests implements FabricGameTest {
 		done(ctx, player);
 	}
 
-	@GameTest(templateName = EMPTY_STRUCTURE, batchId = "echo_call", tickLimit = 200)
-	public void theCallRaisesAnEchoThatFadesWithoutLoot(TestContext ctx) {
-		ServerWorld world = ctx.getWorld();
-		BlockPos at = ctx.getAbsolutePos(new BlockPos(3, 2, 3));
-		floor(world, at.add(-3, 0, -3), 7, 7);
-		ServerPlayerEntity player = shepherd(ctx, at);
+	@GameTest(template = EMPTY_STRUCTURE, batch = "echo_call", timeoutTicks = 200)
+	public void theCallRaisesAnEchoThatFadesWithoutLoot(GameTestHelper ctx) {
+		ServerLevel world = ctx.getLevel();
+		BlockPos at = ctx.absolutePos(new BlockPos(3, 2, 3));
+		floor(world, at.offset(-3, 0, -3), 7, 7);
+		ServerPlayer player = shepherd(ctx, at);
 		RaceData data = RaceState.of(player);
 		learn(player, data, EchoType.of(EntityType.ZOMBIE).orElseThrow());
 		data.addResource(100);
 		check(Shepherd.call(player, data) == AbilityResult.OK, "the Call should raise the echo");
 		check(Math.abs(data.resource - 85) < 0.01f, "a zombie echo costs 15 voice, left " + data.resource);
-		check(Echoes.count(player.getUuid()) == 1 && Shepherd.capacityUsed(data, player.getUuid()) == 1, "one echo, one bond slot");
-		MobEntity echo = world.getEntitiesByClass(MobEntity.class, new Box(at).expand(8), Echoes::isEcho).stream().findFirst().orElse(null);
+		check(Echoes.count(player.getUUID()) == 1 && Shepherd.capacityUsed(data, player.getUUID()) == 1, "one echo, one bond slot");
+		Mob echo = world.getEntitiesOfClass(Mob.class, new AABB(at).inflate(8), Echoes::isEcho).stream().findFirst().orElse(null);
 		check(echo != null, "the echo stands in the world");
-		ctx.waitAndRun(70, () -> {
+		ctx.runAfterDelay(70, () -> {
 			float before = echo.getHealth();
-			echo.timeUntilRegen = 0;
-			echo.damage(world.getDamageSources().playerAttack(player), 4);
+			echo.invulnerableTime = 0;
+			echo.hurt(world.damageSources().playerAttack(player), 4);
 			check(echo.getHealth() == before, "a Shepherd can't hurt its own echo");
-			echo.timeUntilRegen = 0;
-			echo.damage(world.getDamageSources().generic(), 1000);
-			check(!echo.isAlive() && Echoes.count(player.getUuid()) == 0, "a fallen echo fades");
-			check(world.getEntitiesByClass(ItemEntity.class, new Box(at).expand(8), e -> true).isEmpty(), "an echo drops nothing");
+			echo.invulnerableTime = 0;
+			echo.hurt(world.damageSources().generic(), 1000);
+			check(!echo.isAlive() && Echoes.count(player.getUUID()) == 0, "a fallen echo fades");
+			check(world.getEntitiesOfClass(ItemEntity.class, new AABB(at).inflate(8), e -> true).isEmpty(), "an echo drops nothing");
 			done(ctx, player);
 		});
 	}
 
-	@GameTest(templateName = EMPTY_STRUCTURE, batchId = "echo_capacity", tickLimit = 100)
-	public void heavyArmourCrowdsTheBonds(TestContext ctx) {
-		ServerWorld world = ctx.getWorld();
-		BlockPos at = ctx.getAbsolutePos(new BlockPos(3, 2, 3));
-		floor(world, at.add(-3, 0, -3), 7, 7);
-		ServerPlayerEntity player = shepherd(ctx, at);
+	@GameTest(template = EMPTY_STRUCTURE, batch = "echo_capacity", timeoutTicks = 100)
+	public void heavyArmourCrowdsTheBonds(GameTestHelper ctx) {
+		ServerLevel world = ctx.getLevel();
+		BlockPos at = ctx.absolutePos(new BlockPos(3, 2, 3));
+		floor(world, at.offset(-3, 0, -3), 7, 7);
+		ServerPlayer player = shepherd(ctx, at);
 		RaceData data = RaceState.of(player);
 		check(Shepherd.capacityMax(player, data) == 4, "4 bond slots to start");
-		player.equipStack(EquipmentSlot.CHEST, new ItemStack(Items.DIAMOND_CHESTPLATE));
-		player.equipStack(EquipmentSlot.LEGS, new ItemStack(Items.DIAMOND_LEGGINGS));
-		player.equipStack(EquipmentSlot.HEAD, new ItemStack(Items.IRON_HELMET));
-		player.equipStack(EquipmentSlot.FEET, new ItemStack(Items.IRON_BOOTS));
+		player.setItemSlot(EquipmentSlot.CHEST, new ItemStack(Items.DIAMOND_CHESTPLATE));
+		player.setItemSlot(EquipmentSlot.LEGS, new ItemStack(Items.DIAMOND_LEGGINGS));
+		player.setItemSlot(EquipmentSlot.HEAD, new ItemStack(Items.IRON_HELMET));
+		player.setItemSlot(EquipmentSlot.FEET, new ItemStack(Items.IRON_BOOTS));
 		check(Shepherd.capacityMax(player, data) == 1, "2 diamond + 2 iron = 6 points = 3 slots, got " + Shepherd.capacityMax(player, data));
 		data.talents.add(Talents.VOICE_ARMOR);
-		player.equipStack(EquipmentSlot.LEGS, new ItemStack(Items.IRON_LEGGINGS));
+		player.setItemSlot(EquipmentSlot.LEGS, new ItemStack(Items.IRON_LEGGINGS));
 		check(Shepherd.capacityMax(player, data) == 3, "Used to Iron: only the diamond chestplate counts (2 points = 1 slot)");
 		learn(player, data, EchoType.of(EntityType.SKELETON).orElseThrow());
 		data.shepherd.presets.get(0).clear();
 		data.shepherd.presets.get(0).put(EchoType.of(EntityType.SKELETON).orElseThrow().id(), 2);
 		data.addResource(100);
-		check(Shepherd.call(player, data) == AbilityResult.OK && Echoes.count(player.getUuid()) == 1, "one skeleton fits (2 of 3 slots), the other doesn't");
+		check(Shepherd.call(player, data) == AbilityResult.OK && Echoes.count(player.getUUID()) == 1, "one skeleton fits (2 of 3 slots), the other doesn't");
 		data.readyAt.clear();
 		check(Shepherd.call(player, data) == AbilityResult.NO_CAPACITY, "no room for the second one"); 
 		data.alt = true;
-		check(Shepherd.call(player, data) == AbilityResult.OK && Echoes.count(player.getUuid()) == 0, "sneak + Call sends them back");
+		check(Shepherd.call(player, data) == AbilityResult.OK && Echoes.count(player.getUUID()) == 0, "sneak + Call sends them back");
 		data.alt = false;
 		done(ctx, player);
 	}
 
-	@GameTest(templateName = EMPTY_STRUCTURE, batchId = "bond", tickLimit = 200)
-	public void theBondRitualNeedsSongFoodAndFire(TestContext ctx) {
-		ServerWorld world = ctx.getWorld();
-		BlockPos at = ctx.getAbsolutePos(new BlockPos(3, 2, 3));
+	@GameTest(template = EMPTY_STRUCTURE, batch = "bond", timeoutTicks = 200)
+	public void theBondRitualNeedsSongFoodAndFire(GameTestHelper ctx) {
+		ServerLevel world = ctx.getLevel();
+		BlockPos at = ctx.absolutePos(new BlockPos(3, 2, 3));
 		holdChunks(world, at);
-		floor(world, at.add(-3, 0, -3), 7, 7);
-		ServerPlayerEntity player = shepherd(ctx, at);
+		floor(world, at.offset(-3, 0, -3), 7, 7);
+		ServerPlayer player = shepherd(ctx, at);
 		RaceData data = RaceState.of(player);
 		data.addResource(100);
-		WolfEntity wolf = EntityType.WOLF.create(world);
-		wolf.refreshPositionAndAngles(at.getX() + 2.5, at.getY(), at.getZ() + 0.5, 0, 0);
-		wolf.setAiDisabled(true);
-		world.spawnEntity(wolf);
+		Wolf wolf = EntityType.WOLF.create(world);
+		wolf.moveTo(at.getX() + 2.5, at.getY(), at.getZ() + 0.5, 0, 0);
+		wolf.setNoAi(true);
+		world.addFreshEntity(wolf);
 
-		player.setStackInHand(Hand.MAIN_HAND, new ItemStack(Items.BEEF, 8));
-		check(Bonds.interact(player, data, wolf, Hand.MAIN_HAND) == ActionResult.PASS, "food before the Song does nothing special");
+		player.setItemInHand(InteractionHand.MAIN_HAND, new ItemStack(Items.BEEF, 8));
+		check(Bonds.interact(player, data, wolf, InteractionHand.MAIN_HAND) == InteractionResult.PASS, "food before the Song does nothing special");
 		// The Song is its own ability now: on the beast in sight (yaw 0 looks south, +Z), then a cooldown
-		player.setStackInHand(Hand.MAIN_HAND, ItemStack.EMPTY);
+		player.setItemInHand(InteractionHand.MAIN_HAND, ItemStack.EMPTY);
 		check(Bonds.song(player, data) == AbilityResult.NO_BEAST, "no beast in sight, no Song");
-		wolf.refreshPositionAndAngles(at.getX() + 0.5, at.getY(), at.getZ() + 2.5, 0, 0);
+		wolf.moveTo(at.getX() + 0.5, at.getY(), at.getZ() + 2.5, 0, 0);
 		// A wolf is low: look down at it
-		player.setPitch(30);
+		player.setXRot(30);
 		check(Bonds.song(player, data) == AbilityResult.OK, "the Song of Bonds on the wolf ahead");
-		player.setPitch(0);
+		player.setXRot(0);
 		check(Math.abs(data.resource - 80) < 0.01f, "the Song costs 20 voice");
 		check(Bonds.song(player, data) == AbilityResult.COOLDOWN, "and then waits 30 seconds");
-		player.setSneaking(true);
-		player.setStackInHand(Hand.MAIN_HAND, ItemStack.EMPTY);
-		check(Bonds.interact(player, data, wolf, Hand.MAIN_HAND) == ActionResult.PASS, "sneak + right click no longer sings");
-		player.setSneaking(false);
-		player.setStackInHand(Hand.MAIN_HAND, new ItemStack(Items.BEEF, 8));
-		check(Bonds.interact(player, data, wolf, Hand.MAIN_HAND) == ActionResult.SUCCESS, "first feeding");
-		check(Bonds.interact(player, data, wolf, Hand.MAIN_HAND) == ActionResult.FAIL, "not again right away");
-		ShepherdData.Ritual ritual = data.shepherd.rituals.get(wolf.getUuid());
+		player.setShiftKeyDown(true);
+		player.setItemInHand(InteractionHand.MAIN_HAND, ItemStack.EMPTY);
+		check(Bonds.interact(player, data, wolf, InteractionHand.MAIN_HAND) == InteractionResult.PASS, "sneak + right click no longer sings");
+		player.setShiftKeyDown(false);
+		player.setItemInHand(InteractionHand.MAIN_HAND, new ItemStack(Items.BEEF, 8));
+		check(Bonds.interact(player, data, wolf, InteractionHand.MAIN_HAND) == InteractionResult.SUCCESS, "first feeding");
+		check(Bonds.interact(player, data, wolf, InteractionHand.MAIN_HAND) == InteractionResult.FAIL, "not again right away");
+		ShepherdData.Ritual ritual = data.shepherd.rituals.get(wolf.getUUID());
 		ritual.lastFeed -= Bonds.FEED_GAP;
-		check(Bonds.interact(player, data, wolf, Hand.MAIN_HAND) == ActionResult.SUCCESS, "second feeding a minute later");
+		check(Bonds.interact(player, data, wolf, InteractionHand.MAIN_HAND) == InteractionResult.SUCCESS, "second feeding a minute later");
 		ritual.lastFeed -= Bonds.FEED_GAP;
-		check(Bonds.interact(player, data, wolf, Hand.MAIN_HAND) == ActionResult.SUCCESS, "third feeding");
+		check(Bonds.interact(player, data, wolf, InteractionHand.MAIN_HAND) == InteractionResult.SUCCESS, "third feeding");
 		ritual.lastFeed -= Bonds.FEED_GAP;
-		check(Bonds.interact(player, data, wolf, Hand.MAIN_HAND) == ActionResult.FAIL, "the last one needs a campfire");
-		world.setBlockState(at.add(-2, 0, 0), Blocks.CAMPFIRE.getDefaultState());
-		check(Bonds.interact(player, data, wolf, Hand.MAIN_HAND) == ActionResult.SUCCESS, "by the fire the bond is made");
-		check(data.shepherd.bonds.size() == 1 && wolf.isTamed() && player.getUuid().equals(wolf.getOwnerUuid()), "the wolf is the Shepherd's");
-		check(Shepherd.capacityUsed(data, player.getUuid()) == 2, "a wolf takes 2 bond slots");
-		check(player.getMainHandStack().getCount() == 4, "four pieces of meat eaten");
+		check(Bonds.interact(player, data, wolf, InteractionHand.MAIN_HAND) == InteractionResult.FAIL, "the last one needs a campfire");
+		world.setBlockAndUpdate(at.offset(-2, 0, 0), Blocks.CAMPFIRE.defaultBlockState());
+		check(Bonds.interact(player, data, wolf, InteractionHand.MAIN_HAND) == InteractionResult.SUCCESS, "by the fire the bond is made");
+		check(data.shepherd.bonds.size() == 1 && wolf.isTame() && player.getUUID().equals(wolf.getOwnerUUID()), "the wolf is the Shepherd's");
+		check(Shepherd.capacityUsed(data, player.getUUID()) == 2, "a wolf takes 2 bond slots");
+		check(player.getMainHandItem().getCount() == 4, "four pieces of meat eaten");
 
 		// It falls: rests instead of dying, and comes back when the rest is over
-		wolf.timeUntilRegen = 0;
-		wolf.damage(world.getDamageSources().generic(), 1000);
+		wolf.invulnerableTime = 0;
+		wolf.hurt(world.damageSources().generic(), 1000);
 		ShepherdData.Bond bond = data.shepherd.bonds.get(0);
 		check(wolf.isRemoved() && bond.resting(), "a fallen beast goes to rest");
-		bond.restingUntil = world.getTime();
+		bond.restingUntil = world.getGameTime();
 		Bonds.tickOwner(player, data);
 		check(!bond.resting(), "the rest is over");
 		// A freshly spawned body may take a tick or two to show in the test world's books
-		ctx.runAtTick(ctx.getTick() + 3, () -> {
-			check(world.getEntity(bond.entity) instanceof WolfEntity back && back.isAlive(), "and comes back to its Shepherd");
+		ctx.runAtTickTime(ctx.getTick() + 3, () -> {
+			check(world.getEntity(bond.entity) instanceof Wolf back && back.isAlive(), "and comes back to its Shepherd");
 			world.getEntity(bond.entity).discard();
-			world.removeBlock(at.add(-2, 0, 0), false);
+			world.removeBlock(at.offset(-2, 0, 0), false);
 			releaseChunks(world, at);
 			done(ctx, player);
 		});
 	}
 
-	static <T extends MobEntity> T beast(TestContext ctx, EntityType<T> type, BlockPos at) {
-		T mob = type.create(ctx.getWorld());
-		mob.refreshPositionAndAngles(at.getX() + 0.5, at.getY(), at.getZ() + 0.5, 0, 0);
-		mob.setAiDisabled(true);
-		ctx.getWorld().spawnEntity(mob);
+	static <T extends Mob> T beast(GameTestHelper ctx, EntityType<T> type, BlockPos at) {
+		T mob = type.create(ctx.getLevel());
+		mob.moveTo(at.getX() + 0.5, at.getY(), at.getZ() + 0.5, 0, 0);
+		mob.setNoAi(true);
+		ctx.getLevel().addFreshEntity(mob);
 		return mob;
 	}
 
-	static void sing(ServerPlayerEntity player, RaceData data, MobEntity mob) {
+	static void sing(ServerPlayer player, RaceData data, Mob mob) {
 		Bonds.singTo(player, data, mob);
 	}
 
-	@GameTest(templateName = EMPTY_STRUCTURE, batchId = "taming", tickLimit = 200)
-	public void everyBeastIsWonItsOwnWay(TestContext ctx) {
-		ServerWorld world = ctx.getWorld();
-		BlockPos at = ctx.getAbsolutePos(new BlockPos(4, 2, 4));
-		floor(world, at.add(-4, 0, -4), 9, 9);
-		ServerPlayerEntity player = shepherd(ctx, at);
+	@GameTest(template = EMPTY_STRUCTURE, batch = "taming", timeoutTicks = 200)
+	public void everyBeastIsWonItsOwnWay(GameTestHelper ctx) {
+		ServerLevel world = ctx.getLevel();
+		BlockPos at = ctx.absolutePos(new BlockPos(4, 2, 4));
+		floor(world, at.offset(-4, 0, -4), 9, 9);
+		ServerPlayer player = shepherd(ctx, at);
 		RaceData data = RaceState.of(player);
 		data.talents.add(Talents.VOICE_CAPACITY);
 		data.talents.add(Talents.LEGION_CAPACITY);
 		data.talents.add(Talents.LEGION_MORE);
 
 		// The bee: two different flowers
-		BeeEntity bee = beast(ctx, EntityType.BEE, at.add(2, 1, 0));
+		Bee bee = beast(ctx, EntityType.BEE, at.offset(2, 1, 0));
 		data.addResource(100);
 		sing(player, data, bee);
-		player.setStackInHand(Hand.MAIN_HAND, new ItemStack(Items.POPPY, 4));
-		check(Bonds.interact(player, data, bee, Hand.MAIN_HAND) == ActionResult.SUCCESS, "the first flower");
-		check(Bonds.interact(player, data, bee, Hand.MAIN_HAND) == ActionResult.FAIL, "not the same flower twice");
-		player.setStackInHand(Hand.MAIN_HAND, new ItemStack(Items.DANDELION));
-		check(Bonds.interact(player, data, bee, Hand.MAIN_HAND) == ActionResult.SUCCESS && data.shepherd.bond(bee.getUuid()).isEmpty(),
+		player.setItemInHand(InteractionHand.MAIN_HAND, new ItemStack(Items.POPPY, 4));
+		check(Bonds.interact(player, data, bee, InteractionHand.MAIN_HAND) == InteractionResult.SUCCESS, "the first flower");
+		check(Bonds.interact(player, data, bee, InteractionHand.MAIN_HAND) == InteractionResult.FAIL, "not the same flower twice");
+		player.setItemInHand(InteractionHand.MAIN_HAND, new ItemStack(Items.DANDELION));
+		check(Bonds.interact(player, data, bee, InteractionHand.MAIN_HAND) == InteractionResult.SUCCESS && data.shepherd.bond(bee.getUUID()).isEmpty(),
 				"a second kind is not yet enough");
-		player.setStackInHand(Hand.MAIN_HAND, new ItemStack(Items.CORNFLOWER));
-		check(Bonds.interact(player, data, bee, Hand.MAIN_HAND) == ActionResult.SUCCESS && data.shepherd.bond(bee.getUuid()).isPresent(),
+		player.setItemInHand(InteractionHand.MAIN_HAND, new ItemStack(Items.CORNFLOWER));
+		check(Bonds.interact(player, data, bee, InteractionHand.MAIN_HAND) == InteractionResult.SUCCESS && data.shepherd.bond(bee.getUUID()).isPresent(),
 				"a third kind of flower wins the bee");
 
 		// The goat: three bare-handed headbutts, then wheat
-		GoatEntity goat = beast(ctx, EntityType.GOAT, at.add(-2, 0, 0));
+		Goat goat = beast(ctx, EntityType.GOAT, at.offset(-2, 0, 0));
 		data.addResource(100);
 		sing(player, data, goat);
-		player.setStackInHand(Hand.MAIN_HAND, new ItemStack(Items.WHEAT));
-		check(Bonds.interact(player, data, goat, Hand.MAIN_HAND) == ActionResult.FAIL, "wheat before the headbutts is not enough");
-		player.setStackInHand(Hand.MAIN_HAND, ItemStack.EMPTY);
+		player.setItemInHand(InteractionHand.MAIN_HAND, new ItemStack(Items.WHEAT));
+		check(Bonds.interact(player, data, goat, InteractionHand.MAIN_HAND) == InteractionResult.FAIL, "wheat before the headbutts is not enough");
+		player.setItemInHand(InteractionHand.MAIN_HAND, ItemStack.EMPTY);
 		for (int i = 0; i < 5; i++) {
-			data.shepherd.rituals.get(goat.getUuid()).lastFeed -= 20;
+			data.shepherd.rituals.get(goat.getUUID()).lastFeed -= 20;
 			check(Bonds.headbutt(player, data, goat), "a headbutt counts and is cancelled");
 		}
 		check(goat.getHealth() == goat.getMaxHealth(), "the headbutts did no harm");
-		player.setStackInHand(Hand.MAIN_HAND, new ItemStack(Items.WHEAT));
-		check(Bonds.interact(player, data, goat, Hand.MAIN_HAND) == ActionResult.SUCCESS && data.shepherd.bond(goat.getUuid()).isPresent(),
+		player.setItemInHand(InteractionHand.MAIN_HAND, new ItemStack(Items.WHEAT));
+		check(Bonds.interact(player, data, goat, InteractionHand.MAIN_HAND) == InteractionResult.SUCCESS && data.shepherd.bond(goat.getUUID()).isPresent(),
 				"then wheat wins the goat");
 
 		// The parrot: three songs a minute apart, with music playing
-		ParrotEntity parrot = beast(ctx, EntityType.PARROT, at.add(0, 0, 2));
+		Parrot parrot = beast(ctx, EntityType.PARROT, at.offset(0, 0, 2));
 		data.addResource(100);
 		check(Bonds.singTo(player, data, parrot) == AbilityResult.HINTED, "no music, no listening");
-		world.setBlockState(at.add(0, 0, 4), Blocks.JUKEBOX.getDefaultState().with(JukeboxBlock.HAS_RECORD, true));
+		world.setBlockAndUpdate(at.offset(0, 0, 4), Blocks.JUKEBOX.defaultBlockState().setValue(JukeboxBlock.HAS_RECORD, true));
 		for (int i = 0; i < 3; i++) {
 			data.addResource(100);
 			sing(player, data, parrot);
-			ShepherdData.Ritual r = data.shepherd.rituals.get(parrot.getUuid());
+			ShepherdData.Ritual r = data.shepherd.rituals.get(parrot.getUUID());
 			if (r != null) {
 				r.lastFeed -= Bonds.FEED_GAP;
 			}
 		}
-		check(data.shepherd.bond(parrot.getUuid()).isPresent() && parrot.isTamed(), "three songs win the parrot");
+		check(data.shepherd.bond(parrot.getUUID()).isPresent() && parrot.isTame(), "three songs win the parrot");
 
 		// The cat: crouching beside it with fish for ten seconds
-		CatEntity cat = beast(ctx, EntityType.CAT, at.add(1, 0, -1));
+		Cat cat = beast(ctx, EntityType.CAT, at.offset(1, 0, -1));
 		data.addResource(100);
 		sing(player, data, cat);
-		player.setStackInHand(Hand.MAIN_HAND, new ItemStack(Items.COD, 2));
-		player.setSneaking(true);
+		player.setItemInHand(InteractionHand.MAIN_HAND, new ItemStack(Items.COD, 2));
+		player.setShiftKeyDown(true);
 		for (int i = 0; i < 20; i++) {
 			Bonds.tickOwner(player, data);
 		}
-		player.setSneaking(false);
-		check(data.shepherd.bond(cat.getUuid()).isPresent() && player.getMainHandStack().getCount() == 1, "patience wins the cat, for one fish");
+		player.setShiftKeyDown(false);
+		check(data.shepherd.bond(cat.getUUID()).isPresent() && player.getMainHandItem().getCount() == 1, "patience wins the cat, for one fish");
 
 		// The polar bear: three monsters killed in front of it
-		PolarBearEntity bear = beast(ctx, EntityType.POLAR_BEAR, at.add(-2, 0, 2));
+		PolarBear bear = beast(ctx, EntityType.POLAR_BEAR, at.offset(-2, 0, 2));
 		data.addResource(100);
 		sing(player, data, bear);
 		for (int i = 0; i < 5; i++) {
-			ZombieEntity zombie = beast(ctx, EntityType.ZOMBIE, at.add(-3, 0, 3));
+			Zombie zombie = beast(ctx, EntityType.ZOMBIE, at.offset(-3, 0, 3));
 			Bonds.onHunt(player, data, zombie);
 			zombie.discard();
 		}
-		check(data.shepherd.bond(bear.getUuid()).isPresent(), "strength wins the polar bear");
+		check(data.shepherd.bond(bear.getUUID()).isPresent(), "strength wins the polar bear");
 
 		// The fox only listens while she sleeps
-		FoxEntity fox = beast(ctx, EntityType.FOX, at.add(3, 0, 3));
+		Fox fox = beast(ctx, EntityType.FOX, at.offset(3, 0, 3));
 		data.addResource(100);
 		check(Bonds.singTo(player, data, fox) == AbilityResult.HINTED, "an awake fox won't listen");
-		for (MobEntity m : List.of(bee, goat, parrot, cat, bear, fox)) {
+		for (Mob m : List.of(bee, goat, parrot, cat, bear, fox)) {
 			m.discard();
 		}
 		done(ctx, player);
 	}
 
-	@GameTest(templateName = EMPTY_STRUCTURE, batchId = "care", tickLimit = 200)
-	public void bondedBeastsArePettedFedAndToldToStay(TestContext ctx) {
-		ServerWorld world = ctx.getWorld();
-		BlockPos at = ctx.getAbsolutePos(new BlockPos(4, 2, 4));
-		floor(world, at.add(-4, 0, -4), 9, 9);
-		ServerPlayerEntity player = shepherd(ctx, at);
+	@GameTest(template = EMPTY_STRUCTURE, batch = "care", timeoutTicks = 200)
+	public void bondedBeastsArePettedFedAndToldToStay(GameTestHelper ctx) {
+		ServerLevel world = ctx.getLevel();
+		BlockPos at = ctx.absolutePos(new BlockPos(4, 2, 4));
+		floor(world, at.offset(-4, 0, -4), 9, 9);
+		ServerPlayer player = shepherd(ctx, at);
 		RaceData data = RaceState.of(player);
 		data.addResource(100);
-		RabbitEntity rabbit = beast(ctx, EntityType.RABBIT, at.add(2, 0, 0));
+		Rabbit rabbit = beast(ctx, EntityType.RABBIT, at.offset(2, 0, 0));
 		sing(player, data, rabbit);
-		player.setStackInHand(Hand.MAIN_HAND, new ItemStack(Items.GOLDEN_CARROT, 2));
-		Bonds.interact(player, data, rabbit, Hand.MAIN_HAND);
-		data.shepherd.rituals.get(rabbit.getUuid()).lastFeed -= Bonds.FEED_GAP;
-		Bonds.interact(player, data, rabbit, Hand.MAIN_HAND);
-		ShepherdData.Bond bond = data.shepherd.bond(rabbit.getUuid()).orElseThrow();
+		player.setItemInHand(InteractionHand.MAIN_HAND, new ItemStack(Items.GOLDEN_CARROT, 2));
+		Bonds.interact(player, data, rabbit, InteractionHand.MAIN_HAND);
+		data.shepherd.rituals.get(rabbit.getUUID()).lastFeed -= Bonds.FEED_GAP;
+		Bonds.interact(player, data, rabbit, InteractionHand.MAIN_HAND);
+		ShepherdData.Bond bond = data.shepherd.bond(rabbit.getUUID()).orElseThrow();
 		check(Bonds.singTo(player, data, rabbit) == AbilityResult.HINTED, "singing to your own beast only reminds how to care for it");
 
 		// Petting: hearts always, the reward once in two minutes
-		player.setStackInHand(Hand.MAIN_HAND, ItemStack.EMPTY);
+		player.setItemInHand(InteractionHand.MAIN_HAND, ItemStack.EMPTY);
 		float voice = data.resource;
 		int xp = bond.xp + bond.level * 1000;
-		check(Bonds.interact(player, data, rabbit, Hand.MAIN_HAND) == ActionResult.SUCCESS, "petting");
+		check(Bonds.interact(player, data, rabbit, InteractionHand.MAIN_HAND) == InteractionResult.SUCCESS, "petting");
 		check(data.resource > voice && bond.xp + bond.level * 1000 > xp, "petting warms the voice and teaches the beast");
 		voice = data.resource;
-		Bonds.interact(player, data, rabbit, Hand.MAIN_HAND);
+		Bonds.interact(player, data, rabbit, InteractionHand.MAIN_HAND);
 		check(data.resource == voice, "petting again right away gives nothing more");
 
 		// Feeding: its treat heals it and keeps it fed; a fed, healthy beast refuses more
 		rabbit.setHealth(1);
-		player.setStackInHand(Hand.MAIN_HAND, new ItemStack(Items.CARROT, 3));
-		check(Bonds.interact(player, data, rabbit, Hand.MAIN_HAND) == ActionResult.SUCCESS && rabbit.getHealth() > 1, "a carrot heals the rabbit");
-		long now = world.getTime();
+		player.setItemInHand(InteractionHand.MAIN_HAND, new ItemStack(Items.CARROT, 3));
+		check(Bonds.interact(player, data, rabbit, InteractionHand.MAIN_HAND) == InteractionResult.SUCCESS && rabbit.getHealth() > 1, "a carrot heals the rabbit");
+		long now = world.getGameTime();
 		check(bond.fedUntil > now && Bonds.fedBonus(data, bond, now) > 1, "the rabbit is fed and bites harder");
 		rabbit.setHealth(rabbit.getMaxHealth());
-		check(Bonds.interact(player, data, rabbit, Hand.MAIN_HAND) == ActionResult.FAIL && player.getMainHandStack().getCount() == 2,
+		check(Bonds.interact(player, data, rabbit, InteractionHand.MAIN_HAND) == InteractionResult.FAIL && player.getMainHandItem().getCount() == 2,
 				"a fed, healthy beast won't eat more");
 
 		// Sneak + right click: it stays, and doesn't jump back to its Shepherd
-		player.setStackInHand(Hand.MAIN_HAND, ItemStack.EMPTY);
-		player.setSneaking(true);
-		Bonds.interact(player, data, rabbit, Hand.MAIN_HAND);
-		player.setSneaking(false);
-		check(bond.staying && rabbit.getCommandTags().contains(Creatures.STAY_TAG), "told to stay");
+		player.setItemInHand(InteractionHand.MAIN_HAND, ItemStack.EMPTY);
+		player.setShiftKeyDown(true);
+		Bonds.interact(player, data, rabbit, InteractionHand.MAIN_HAND);
+		player.setShiftKeyDown(false);
+		check(bond.staying && rabbit.getTags().contains(Creatures.STAY_TAG), "told to stay");
 		check(RaceData.fromNbt(data.toNbt()).shepherd.bonds.get(0).staying, "staying survives a save");
 
 		// Not Today: the first killing blow is shrugged off, the next one sends it to rest
 		data.talents.add(Talents.PACK_NOT_TODAY);
-		rabbit.timeUntilRegen = 0;
-		rabbit.damage(world.getDamageSources().generic(), 1000);
+		rabbit.invulnerableTime = 0;
+		rabbit.hurt(world.damageSources().generic(), 1000);
 		check(rabbit.isAlive() && !bond.resting() && rabbit.getHealth() > 0, "Not Today keeps the rabbit in the fight");
-		rabbit.timeUntilRegen = 0;
-		rabbit.clearStatusEffects();
-		rabbit.damage(world.getDamageSources().generic(), 1000);
+		rabbit.invulnerableTime = 0;
+		rabbit.removeAllEffects();
+		rabbit.hurt(world.damageSources().generic(), 1000);
 		check(bond.resting(), "but only once in five minutes");
 		bond.body = null;
 
@@ -827,46 +827,46 @@ public class RaceGameTests implements FabricGameTest {
 		data.talents.add(Talents.LEGION_LAST_BREATH);
 		EchoType zombieType = EchoType.of(EntityType.ZOMBIE).orElseThrow();
 		learn(player, data, zombieType);
-		MobEntity echo = Echoes.summon(player, data, zombieType, Vec3d.ofBottomCenter(at.add(-2, 0, 0)), false, 0, 0);
-		ZombieEntity foe = beast(ctx, EntityType.ZOMBIE, at.add(-3, 0, 1));
+		Mob echo = Echoes.summon(player, data, zombieType, Vec3.atBottomCenterOf(at.offset(-2, 0, 0)), false, 0, 0);
+		Zombie foe = beast(ctx, EntityType.ZOMBIE, at.offset(-3, 0, 1));
 		float before = foe.getHealth();
-		echo.timeUntilRegen = 0;
-		echo.damage(world.getDamageSources().generic(), 1000);
-		check(foe.getHealth() < before && foe.hasStatusEffect(StatusEffects.SLOWNESS), "the frost hurts and slows the zombie nearby");
+		echo.invulnerableTime = 0;
+		echo.hurt(world.damageSources().generic(), 1000);
+		check(foe.getHealth() < before && foe.hasEffect(MobEffects.MOVEMENT_SLOWDOWN), "the frost hurts and slows the zombie nearby");
 		foe.discard();
-		Echoes.dismiss(world.getServer(), player.getUuid());
+		Echoes.dismiss(world.getServer(), player.getUUID());
 		done(ctx, player);
 	}
 
-	@GameTest(templateName = EMPTY_STRUCTURE, batchId = "echo_traits", tickLimit = 100)
-	public void everyEchoHitsInItsOwnWay(TestContext ctx) {
-		ServerWorld world = ctx.getWorld();
-		BlockPos at = ctx.getAbsolutePos(new BlockPos(3, 2, 3));
-		floor(world, at.add(-3, 0, -3), 7, 7);
-		ServerPlayerEntity player = shepherd(ctx, at);
+	@GameTest(template = EMPTY_STRUCTURE, batch = "echo_traits", timeoutTicks = 100)
+	public void everyEchoHitsInItsOwnWay(GameTestHelper ctx) {
+		ServerLevel world = ctx.getLevel();
+		BlockPos at = ctx.absolutePos(new BlockPos(3, 2, 3));
+		floor(world, at.offset(-3, 0, -3), 7, 7);
+		ServerPlayer player = shepherd(ctx, at);
 		RaceData data = RaceState.of(player);
-		MobEntity vindicator = Echoes.summon(player, data, EchoType.of(EntityType.VINDICATOR).orElseThrow(), Vec3d.ofBottomCenter(at.add(2, 0, 0)),
+		Mob vindicator = Echoes.summon(player, data, EchoType.of(EntityType.VINDICATOR).orElseThrow(), Vec3.atBottomCenterOf(at.offset(2, 0, 0)),
 				false, 0, 0);
-		MobEntity stray = Echoes.summon(player, data, EchoType.of(EntityType.STRAY).orElseThrow(), Vec3d.ofBottomCenter(at.add(-2, 0, 0)),
+		Mob stray = Echoes.summon(player, data, EchoType.of(EntityType.STRAY).orElseThrow(), Vec3.atBottomCenterOf(at.offset(-2, 0, 0)),
 				false, 0, 0);
-		ZombieEntity zombie = beast(ctx, EntityType.ZOMBIE, at.add(0, 0, 2));
+		Zombie zombie = beast(ctx, EntityType.ZOMBIE, at.offset(0, 0, 2));
 		check(Echoes.onHit(vindicator, zombie, 4) == 4, "a healthy foe takes the plain blow");
 		zombie.setHealth(5);
 		check(Echoes.onHit(vindicator, zombie, 4) == 8, "the Executioner doubles it on the nearly dead");
 		Echoes.onHit(stray, zombie, 2);
-		StatusEffectInstance slow = zombie.getStatusEffect(StatusEffects.SLOWNESS);
+		MobEffectInstance slow = zombie.getEffect(MobEffects.MOVEMENT_SLOWDOWN);
 		check(slow != null && slow.getAmplifier() == 2, "a stray echo's arrows freeze: Slowness III");
-		Echoes.dismiss(world.getServer(), player.getUuid());
+		Echoes.dismiss(world.getServer(), player.getUUID());
 		zombie.discard();
 		done(ctx, player);
 	}
 
-	@GameTest(templateName = EMPTY_STRUCTURE, batchId = "squad", tickLimit = 100)
-	public void theCallBringsTheWholeSquadAtOnce(TestContext ctx) {
-		ServerWorld world = ctx.getWorld();
-		BlockPos at = ctx.getAbsolutePos(new BlockPos(4, 2, 4));
-		floor(world, at.add(-4, 0, -4), 9, 9);
-		ServerPlayerEntity player = shepherd(ctx, at);
+	@GameTest(template = EMPTY_STRUCTURE, batch = "squad", timeoutTicks = 100)
+	public void theCallBringsTheWholeSquadAtOnce(GameTestHelper ctx) {
+		ServerLevel world = ctx.getLevel();
+		BlockPos at = ctx.absolutePos(new BlockPos(4, 2, 4));
+		floor(world, at.offset(-4, 0, -4), 9, 9);
+		ServerPlayer player = shepherd(ctx, at);
 		RaceData data = RaceState.of(player);
 		EchoType zombie = EchoType.of(EntityType.ZOMBIE).orElseThrow();
 		EchoType silverfish = EchoType.of(EntityType.SILVERFISH).orElseThrow();
@@ -876,48 +876,48 @@ public class RaceGameTests implements FabricGameTest {
 		check(!Shepherd.editPreset(data, 0, EchoType.of(EntityType.RAVAGER).orElseThrow().id(), 1), "an unlearned echo can't join");
 		data.addResource(100);
 		check(Shepherd.call(player, data) == AbilityResult.OK, "the Call");
-		check(Echoes.count(player.getUuid()) == 5, "two zombies and three silverfish at once, got " + Echoes.count(player.getUuid()));
-		check(Shepherd.capacityUsed(data, player.getUuid()) == 3, "the three silverfish share one bond slot");
+		check(Echoes.count(player.getUUID()) == 5, "two zombies and three silverfish at once, got " + Echoes.count(player.getUUID()));
+		check(Shepherd.capacityUsed(data, player.getUUID()) == 3, "the three silverfish share one bond slot");
 		check(Math.abs(data.resource - 60) < 0.01f, "2 x 15 + 10 voice, left " + data.resource);
 		data.readyAt.clear();
 		Shepherd.call(player, data);
-		check(Echoes.count(player.getUuid()) == 5 && Math.abs(data.resource - 60) < 0.01f, "a full squad isn't called twice");
+		check(Echoes.count(player.getUUID()) == 5 && Math.abs(data.resource - 60) < 0.01f, "a full squad isn't called twice");
 		Shepherd.selectPreset(player, data, 1);
 		data.readyAt.clear();
 		check(Shepherd.call(player, data) == AbilityResult.NO_ECHO, "squad II is empty");
-		Echoes.dismiss(world.getServer(), player.getUuid());
+		Echoes.dismiss(world.getServer(), player.getUUID());
 		done(ctx, player);
 	}
 
-	@GameTest(templateName = EMPTY_STRUCTURE, batchId = "taming2", tickLimit = 100)
-	public void theLlamaWalksAndTheRabbitTakesAGift(TestContext ctx) {
-		ServerWorld world = ctx.getWorld();
-		BlockPos at = ctx.getAbsolutePos(new BlockPos(4, 2, 4));
-		floor(world, at.add(-4, 0, -4), 9, 9);
-		ServerPlayerEntity player = shepherd(ctx, at);
+	@GameTest(template = EMPTY_STRUCTURE, batch = "taming2", timeoutTicks = 100)
+	public void theLlamaWalksAndTheRabbitTakesAGift(GameTestHelper ctx) {
+		ServerLevel world = ctx.getLevel();
+		BlockPos at = ctx.absolutePos(new BlockPos(4, 2, 4));
+		floor(world, at.offset(-4, 0, -4), 9, 9);
+		ServerPlayer player = shepherd(ctx, at);
 		RaceData data = RaceState.of(player);
-		RabbitEntity rabbit = beast(ctx, EntityType.RABBIT, at.add(2, 0, 0));
+		Rabbit rabbit = beast(ctx, EntityType.RABBIT, at.offset(2, 0, 0));
 		data.addResource(100);
 		sing(player, data, rabbit);
-		player.setStackInHand(Hand.MAIN_HAND, new ItemStack(Items.GOLDEN_CARROT, 2));
-		check(Bonds.interact(player, data, rabbit, Hand.MAIN_HAND) == ActionResult.SUCCESS, "the first golden carrot");
-		data.shepherd.rituals.get(rabbit.getUuid()).lastFeed -= Bonds.FEED_GAP;
-		check(Bonds.interact(player, data, rabbit, Hand.MAIN_HAND) == ActionResult.SUCCESS && data.shepherd.bond(rabbit.getUuid()).isPresent(),
+		player.setItemInHand(InteractionHand.MAIN_HAND, new ItemStack(Items.GOLDEN_CARROT, 2));
+		check(Bonds.interact(player, data, rabbit, InteractionHand.MAIN_HAND) == InteractionResult.SUCCESS, "the first golden carrot");
+		data.shepherd.rituals.get(rabbit.getUUID()).lastFeed -= Bonds.FEED_GAP;
+		check(Bonds.interact(player, data, rabbit, InteractionHand.MAIN_HAND) == InteractionResult.SUCCESS && data.shepherd.bond(rabbit.getUUID()).isPresent(),
 				"the second wins the rabbit");
-		LlamaEntity llama = beast(ctx, EntityType.LLAMA, at.add(-2, 0, 0));
+		Llama llama = beast(ctx, EntityType.LLAMA, at.offset(-2, 0, 0));
 		data.addResource(100);
 		sing(player, data, llama);
-		llama.attachLeash(player, true);
+		llama.setLeashedTo(player, true);
 		for (int i = 0; i < 120; i++) {
 			Bonds.tickOwner(player, data);
 		}
-		check(data.shepherd.bond(llama.getUuid()).isPresent(), "two minutes on the lead win the llama");
+		check(data.shepherd.bond(llama.getUUID()).isPresent(), "two minutes on the lead win the llama");
 
 		// Beasts grow from what happens around them; levels and the leader make their skill stronger; names stick
-		ShepherdData.Bond bond = data.shepherd.bond(rabbit.getUuid()).orElseThrow();
+		ShepherdData.Bond bond = data.shepherd.bond(rabbit.getUUID()).orElseThrow();
 		check(Bonds.power(data, bond) == 0, "a fresh beast has power 0");
 		for (int i = 0; i < 12; i++) {
-			ZombieEntity zombie = beast(ctx, EntityType.ZOMBIE, at.add(1, 0, 1));
+			Zombie zombie = beast(ctx, EntityType.ZOMBIE, at.offset(1, 0, 1));
 			Shepherd.onKill(player, zombie);
 			zombie.discard();
 		}
@@ -936,21 +936,21 @@ public class RaceGameTests implements FabricGameTest {
 		done(ctx, player);
 	}
 
-	@GameTest(templateName = EMPTY_STRUCTURE, batchId = "whistle", tickLimit = 100)
-	public void theWhistleOrdersThePackAndTheRallyHealsIt(TestContext ctx) {
-		ServerWorld world = ctx.getWorld();
-		BlockPos at = ctx.getAbsolutePos(new BlockPos(4, 2, 4));
-		floor(world, at.add(-4, 0, -4), 9, 9);
-		ServerPlayerEntity player = shepherd(ctx, at);
+	@GameTest(template = EMPTY_STRUCTURE, batch = "whistle", timeoutTicks = 100)
+	public void theWhistleOrdersThePackAndTheRallyHealsIt(GameTestHelper ctx) {
+		ServerLevel world = ctx.getLevel();
+		BlockPos at = ctx.absolutePos(new BlockPos(4, 2, 4));
+		floor(world, at.offset(-4, 0, -4), 9, 9);
+		ServerPlayer player = shepherd(ctx, at);
 		RaceData data = RaceState.of(player);
 		EchoType zombieType = EchoType.of(EntityType.ZOMBIE).orElseThrow();
 		learn(player, data, zombieType);
-		MobEntity echo = Echoes.summon(player, data, zombieType, Vec3d.ofBottomCenter(at.add(-2, 0, 0)), false, 0, 0);
-		ZombieEntity foe = beast(ctx, EntityType.ZOMBIE, at.add(3, 0, 3));
+		Mob echo = Echoes.summon(player, data, zombieType, Vec3.atBottomCenterOf(at.offset(-2, 0, 0)), false, 0, 0);
+		Zombie foe = beast(ctx, EntityType.ZOMBIE, at.offset(3, 0, 3));
 
 		// The Whistle: Guard -> Hunt -> Follow, for free
 		check(data.shepherd.stance == ShepherdData.GUARD, "the pack starts on Guard");
-		float guarded = Shepherd.modifyDamage(echo, world.getDamageSources().mobAttack(foe), 10);
+		float guarded = Shepherd.modifyDamage(echo, world.damageSources().mobAttack(foe), 10);
 		check(Math.abs(guarded - 8) < 0.01f, "on Guard a creature takes 20% less, got " + guarded);
 		data.addResource(-data.resource);
 		check(Shepherd.whistle(player, data) == AbilityResult.OK && data.shepherd.stance == ShepherdData.HUNT, "Hunt, and it costs no voice");
@@ -971,13 +971,13 @@ public class RaceGameTests implements FabricGameTest {
 		foe.discard();
 
 		// Whistling the pack back to "Follow" brings the far ones to the Shepherd's side
-		echo.refreshPositionAndAngles(at.getX() + 12.5, at.getY(), at.getZ() + 0.5, 0, 0);
+		echo.moveTo(at.getX() + 12.5, at.getY(), at.getZ() + 0.5, 0, 0);
 		for (int i = 0; i < 3; i++) {
 			data.readyAt.clear();
 			Shepherd.whistle(player, data);
 		}
-		check(data.shepherd.stance == ShepherdData.FOLLOW && echo.squaredDistanceTo(player) < 16, "Follow gathers the far echo, now "
-				+ Math.sqrt(echo.squaredDistanceTo(player)));
+		check(data.shepherd.stance == ShepherdData.FOLLOW && echo.distanceToSqr(player) < 16, "Follow gathers the far echo, now "
+				+ Math.sqrt(echo.distanceToSqr(player)));
 
 		// Alt is the Army of Oblivion crown
 		data.addResource(100);
@@ -991,188 +991,188 @@ public class RaceGameTests implements FabricGameTest {
 		light.talents.add(Talents.PACK_LIGHT);
 		check(Shepherd.beastCost(BeastKind.byId("wolf").orElseThrow(), light) == 1 && Shepherd.beastCost(BeastKind.byId("rabbit").orElseThrow(), light) == 1,
 				"Light Bonds: the wolf takes one, the rabbit still one");
-		Echoes.dismiss(world.getServer(), player.getUuid());
+		Echoes.dismiss(world.getServer(), player.getUUID());
 		done(ctx, player);
 	}
 
-	@GameTest(templateName = EMPTY_STRUCTURE, batchId = "shepherd_body", tickLimit = 100)
-	public void shepherdsAreFrailButTheirCreaturesSpareThem(TestContext ctx) {
-		ServerWorld world = ctx.getWorld();
-		BlockPos at = ctx.getAbsolutePos(new BlockPos(2, 2, 2));
-		ServerPlayerEntity player = shepherd(ctx, at);
+	@GameTest(template = EMPTY_STRUCTURE, batch = "shepherd_body", timeoutTicks = 100)
+	public void shepherdsAreFrailButTheirCreaturesSpareThem(GameTestHelper ctx) {
+		ServerLevel world = ctx.getLevel();
+		BlockPos at = ctx.absolutePos(new BlockPos(2, 2, 2));
+		ServerPlayer player = shepherd(ctx, at);
 		RaceData data = RaceState.of(player);
 		Shepherd.tickSecond(player, data);
 		check(Math.abs(player.getMaxHealth() - 16) < 0.01f, "a Shepherd has 2 hearts less, got " + player.getMaxHealth());
-		ZombieEntity zombie = EntityType.ZOMBIE.create(world);
-		zombie.refreshPositionAndAngles(at.getX() + 1.5, at.getY(), at.getZ() + 0.5, 0, 0);
-		check(Math.abs(Shepherd.modifyDamage(zombie, world.getDamageSources().playerAttack(player), 4) - 3) < 0.01f, "its own blow is a quarter weaker");
+		Zombie zombie = EntityType.ZOMBIE.create(world);
+		zombie.moveTo(at.getX() + 1.5, at.getY(), at.getZ() + 0.5, 0, 0);
+		check(Math.abs(Shepherd.modifyDamage(zombie, world.damageSources().playerAttack(player), 4) - 3) < 0.01f, "its own blow is a quarter weaker");
 		data.talents.add(Talents.VOICE_LIFE);
 		data.talents.add(Talents.VOICE_STRENGTH);
 		Shepherd.tickSecond(player, data);
 		check(Math.abs(player.getMaxHealth() - 18) < 0.01f, "Sturdy Body gives one heart back, got " + player.getMaxHealth());
-		check(Math.abs(Shepherd.modifyDamage(zombie, world.getDamageSources().playerAttack(player), 10) - 9) < 0.01f, "Steady Hand: a tenth weaker");
+		check(Math.abs(Shepherd.modifyDamage(zombie, world.damageSources().playerAttack(player), 10) - 9) < 0.01f, "Steady Hand: a tenth weaker");
 		zombie.discard();
 		done(ctx, player);
 	}
 
-	static ServerPlayerEntity frozen(TestContext ctx, BlockPos at) {
-		ServerPlayerEntity player = (ServerPlayerEntity) ctx.createMockCreativeServerPlayerInWorld();
-		player.changeGameMode(GameMode.SURVIVAL);
-		player.refreshPositionAndAngles(at.getX() + 0.5, at.getY(), at.getZ() + 0.5, 0, 0);
+	static ServerPlayer frozen(GameTestHelper ctx, BlockPos at) {
+		ServerPlayer player = (ServerPlayer) ctx.makeMockServerPlayerInLevel();
+		player.setGameMode(GameType.SURVIVAL);
+		player.moveTo(at.getX() + 0.5, at.getY(), at.getZ() + 0.5, 0, 0);
 		RaceState.of(player).reset(Race.FROZEN);
 		return player;
 	}
 
-	@GameTest(templateName = EMPTY_STRUCTURE, batchId = "rewind", tickLimit = 100)
-	public void theRewindFliesBackAlongTheTrail(TestContext ctx) {
-		ServerWorld world = ctx.getWorld();
-		BlockPos at = ctx.getAbsolutePos(new BlockPos(1, 2, 1));
-		floor(world, at.add(-1, 0, -1), 9, 3);
-		ServerPlayerEntity player = frozen(ctx, at);
+	@GameTest(template = EMPTY_STRUCTURE, batch = "rewind", timeoutTicks = 100)
+	public void theRewindFliesBackAlongTheTrail(GameTestHelper ctx) {
+		ServerLevel world = ctx.getLevel();
+		BlockPos at = ctx.absolutePos(new BlockPos(1, 2, 1));
+		floor(world, at.offset(-1, 0, -1), 9, 3);
+		ServerPlayer player = frozen(ctx, at);
 		RaceData data = RaceState.of(player);
 		data.addResource(100);
 		check(Frozen.rewind(player, data) == AbilityResult.HINTED, "no trail yet, no Rewind");
-		Vec3d start = player.getPos();
+		Vec3 start = player.position();
 		// Walk six blocks east over 30 ticks, the trail recording every tick
 		for (int i = 0; i <= 30; i++) {
-			player.refreshPositionAndAngles(start.x + i * 0.2, start.y, start.z, 0, 0);
+			player.moveTo(start.x + i * 0.2, start.y, start.z, 0, 0);
 			Frozen.record(player);
 		}
-		Vec3d left = player.getPos();
+		Vec3 left = player.position();
 		check(Frozen.rewind(player, data) == AbilityResult.OK, "the Rewind");
 		check(Math.abs(data.resource - 70) < 0.01f, "it costs 30 sand, left " + data.resource);
-		check(Frozen.avoids(player, world.getDamageSources().generic()), "nothing touches a Frozen in flight");
+		check(Frozen.avoids(player, world.damageSources().generic()), "nothing touches a Frozen in flight");
 		for (int i = 0; i < 12; i++) {
 			Frozen.tick(world.getServer());
 		}
-		check(player.getPos().distanceTo(start) < 0.5, "back where it was 30 ticks ago, at " + player.getPos() + " from " + left);
-		check(!Frozen.avoids(player, world.getDamageSources().generic()), "and solid again on landing");
+		check(player.position().distanceTo(start) < 0.5, "back where it was 30 ticks ago, at " + player.position() + " from " + left);
+		check(!Frozen.avoids(player, world.damageSources().generic()), "and solid again on landing");
 		check(Frozen.rewind(player, data) == AbilityResult.COOLDOWN, "then it waits");
 		done(ctx, player);
 	}
 
-	@GameTest(templateName = EMPTY_STRUCTURE, batchId = "frozen_dome", tickLimit = 100)
-	public void theDomeHoldsEnemiesAndArrows(TestContext ctx) {
-		ServerWorld world = ctx.getWorld();
-		BlockPos at = ctx.getAbsolutePos(new BlockPos(4, 2, 4));
-		floor(world, at.add(-4, 0, -4), 9, 9);
-		ServerPlayerEntity player = frozen(ctx, at);
+	@GameTest(template = EMPTY_STRUCTURE, batch = "frozen_dome", timeoutTicks = 100)
+	public void theDomeHoldsEnemiesAndArrows(GameTestHelper ctx) {
+		ServerLevel world = ctx.getLevel();
+		BlockPos at = ctx.absolutePos(new BlockPos(4, 2, 4));
+		floor(world, at.offset(-4, 0, -4), 9, 9);
+		ServerPlayer player = frozen(ctx, at);
 		RaceData data = RaceState.of(player);
-		ZombieEntity zombie = beast(ctx, EntityType.ZOMBIE, at.add(2, 0, 0));
-		ArrowEntity arrow = new ArrowEntity(world, at.getX() - 2.0, at.getY() + 1.5, at.getZ() + 0.5);
-		arrow.setVelocity(1, 0, 0);
+		Zombie zombie = beast(ctx, EntityType.ZOMBIE, at.offset(2, 0, 0));
+		Arrow arrow = new Arrow(world, at.getX() - 2.0, at.getY() + 1.5, at.getZ() + 0.5);
+		arrow.setDeltaMovement(1, 0, 0);
 		arrow.setNoGravity(true);
-		world.spawnEntity(arrow);
+		world.addFreshEntity(arrow);
 		data.addResource(100);
 		check(Frozen.dome(player, data) == AbilityResult.OK, "the Dome");
 		Frozen.tick(world.getServer());
-		StatusEffectInstance slow = zombie.getStatusEffect(StatusEffects.SLOWNESS);
+		MobEffectInstance slow = zombie.getEffect(MobEffects.MOVEMENT_SLOWDOWN);
 		check(slow != null && slow.getAmplifier() >= 3, "the zombie under the Dome all but stops");
-		check(arrow.getVelocity().lengthSquared() < 1.0E-6, "the arrow hangs in the air");
+		check(arrow.getDeltaMovement().lengthSqr() < 1.0E-6, "the arrow hangs in the air");
 		check(Frozen.dome(player, data) == AbilityResult.COOLDOWN, "one Dome at a time");
 		zombie.discard();
 		arrow.discard();
 		done(ctx, player);
 	}
 
-	@GameTest(templateName = EMPTY_STRUCTURE, batchId = "quicken", tickLimit = 100)
-	public void theQuickeningSpeedsWorkingBlocks(TestContext ctx) {
-		ServerWorld world = ctx.getWorld();
-		BlockPos at = ctx.getAbsolutePos(new BlockPos(1, 2, 1));
-		floor(world, at.add(-1, 0, -1), 3, 3);
-		world.setBlockState(at.down(), Blocks.FARMLAND.getDefaultState());
-		world.setBlockState(at, Blocks.WHEAT.getDefaultState());
-		world.setBlockState(at.east(), Blocks.FURNACE.getDefaultState());
+	@GameTest(template = EMPTY_STRUCTURE, batch = "quicken", timeoutTicks = 100)
+	public void theQuickeningSpeedsWorkingBlocks(GameTestHelper ctx) {
+		ServerLevel world = ctx.getLevel();
+		BlockPos at = ctx.absolutePos(new BlockPos(1, 2, 1));
+		floor(world, at.offset(-1, 0, -1), 3, 3);
+		world.setBlockAndUpdate(at.below(), Blocks.FARMLAND.defaultBlockState());
+		world.setBlockAndUpdate(at, Blocks.WHEAT.defaultBlockState());
+		world.setBlockAndUpdate(at.east(), Blocks.FURNACE.defaultBlockState());
 		check(Frozen.quickenable(world, at) && Frozen.quickenable(world, at.east()), "crops and furnaces can be quickened");
-		check(!Frozen.quickenable(world, at.add(-1, -1, 0)), "plain stone can't");
-		ServerPlayerEntity player = frozen(ctx, at);
+		check(!Frozen.quickenable(world, at.offset(-1, -1, 0)), "plain stone can't");
+		ServerPlayer player = frozen(ctx, at);
 		RaceData data = RaceState.of(player);
 		data.addResource(100);
-		player.setPitch(90);
+		player.setXRot(90);
 		check(Frozen.quicken(player, data) == AbilityResult.OK && Frozen.quickened(world, at), "looking down at the wheat quickens it");
 		// A burning furnace, quickened: 25 ticks of the Quickening smelt as much as 250 plain ones (one item)
 		if (world.getBlockEntity(at.east()) instanceof AbstractFurnaceBlockEntity furnace) {
-			furnace.setStack(0, new ItemStack(Items.RAW_IRON, 8));
-			furnace.setStack(1, new ItemStack(Items.COAL, 4));
+			furnace.setItem(0, new ItemStack(Items.RAW_IRON, 8));
+			furnace.setItem(1, new ItemStack(Items.COAL, 4));
 			// Facing east and down at the furnace beside the wheat
 			// (a living entity looks where its head turns, so the head too)
-			player.setPitch(45);
-			player.setYaw(-90);
-			player.setHeadYaw(-90);
+			player.setXRot(45);
+			player.setYRot(-90);
+			player.setYHeadRot(-90);
 			data.readyAt.clear();
 			AbilityResult quickened = Frozen.quicken(player, data);
 			for (int i = 0; i < 25; i++) {
 				Frozen.tick(world.getServer());
 			}
-			net.minecraft.util.hit.HitResult hit = player.raycast(6, 1.0f, false);
-			check(furnace.getStack(2).getCount() >= 1, "the quickened furnace smelts: " + quickened + ", quickened " + Frozen.quickened(world, at.east())
-					+ ", look " + hit.getType() + " at " + (hit instanceof net.minecraft.util.hit.BlockHitResult b ? b.getBlockPos().subtract(at) : null)
-					+ ", furnace " + furnace.createNbt());
+			net.minecraft.world.phys.HitResult hit = player.pick(6, 1.0f, false);
+			check(furnace.getItem(2).getCount() >= 1, "the quickened furnace smelts: " + quickened + ", quickened " + Frozen.quickened(world, at.east())
+					+ ", look " + hit.getType() + " at " + (hit instanceof net.minecraft.world.phys.BlockHitResult b ? b.getBlockPos().subtract(at) : null)
+					+ ", furnace " + furnace.saveWithoutMetadata());
 		}
 		world.removeBlock(at.east(), false);
 		done(ctx, player);
 	}
 
-	@GameTest(templateName = EMPTY_STRUCTURE, batchId = "frozen_body", tickLimit = 100)
-	public void theFrozenHealSlowAndHoldOnToTheMoment(TestContext ctx) {
-		ServerPlayerEntity player = frozen(ctx, ctx.getAbsolutePos(new BlockPos(1, 2, 1)));
+	@GameTest(template = EMPTY_STRUCTURE, batch = "frozen_body", timeoutTicks = 100)
+	public void theFrozenHealSlowAndHoldOnToTheMoment(GameTestHelper ctx) {
+		ServerPlayer player = frozen(ctx, ctx.absolutePos(new BlockPos(1, 2, 1)));
 		RaceData data = RaceState.of(player);
 		check(Frozen.naturalHealing(player) == 0.5f, "natural healing at half speed");
-		StatusEffectInstance speed = Frozen.shorten(player, new StatusEffectInstance(StatusEffects.SPEED, 600));
+		MobEffectInstance speed = Frozen.shorten(player, new MobEffectInstance(MobEffects.MOVEMENT_SPEED, 600));
 		check(speed.getDuration() == 420, "a potion lasts 30% shorter, got " + speed.getDuration());
 		// Doubled Moment: every third blow lands half again as hard; Viscous Time slows
 		data.talents.add(Talents.FLOW_ECHO);
 		data.talents.add(Talents.FLOW_VISCOUS);
-		ZombieEntity zombie = EntityType.ZOMBIE.create(ctx.getWorld());
+		Zombie zombie = EntityType.ZOMBIE.create(ctx.getLevel());
 		float[] blows = new float[3];
 		for (int i = 0; i < 3; i++) {
-			blows[i] = Frozen.onHit(zombie, player.getDamageSources().playerAttack(player), 4);
+			blows[i] = Frozen.onHit(zombie, player.damageSources().playerAttack(player), 4);
 		}
 		check(blows[0] == 4 && blows[1] == 4 && blows[2] == 6, "the third blow is doubled by half: " + blows[2]);
-		check(zombie.hasStatusEffect(StatusEffects.SLOWNESS), "the zombie's time thickens");
+		check(zombie.hasEffect(MobEffects.MOVEMENT_SLOWDOWN), "the zombie's time thickens");
 		data.talents.add(Talents.LOOP_ETERNAL);
 		player.setHealth(player.getMaxHealth());
-		float first = Frozen.modifyDamage(player, player.getDamageSources().generic(), player.getMaxHealth() - 2);
+		float first = Frozen.modifyDamage(player, player.damageSources().generic(), player.getMaxHealth() - 2);
 		player.setHealth(player.getHealth() - first);
-		check(Frozen.modifyDamage(player, player.getDamageSources().generic(), 100) <= player.getHealth() - 1,
+		check(Frozen.modifyDamage(player, player.damageSources().generic(), 100) <= player.getHealth() - 1,
 				"the Eternal Moment began on the low blow: nothing kills now");
 		done(ctx, player);
 	}
 
-	static ServerPlayerEntity bloodkin(TestContext ctx, BlockPos at) {
-		ServerPlayerEntity player = (ServerPlayerEntity) ctx.createMockCreativeServerPlayerInWorld();
-		player.changeGameMode(GameMode.SURVIVAL);
-		player.refreshPositionAndAngles(at.getX() + 0.5, at.getY(), at.getZ() + 0.5, 0, 0);
+	static ServerPlayer bloodkin(GameTestHelper ctx, BlockPos at) {
+		ServerPlayer player = (ServerPlayer) ctx.makeMockServerPlayerInLevel();
+		player.setGameMode(GameType.SURVIVAL);
+		player.moveTo(at.getX() + 0.5, at.getY(), at.getZ() + 0.5, 0, 0);
 		RaceState.of(player).reset(Race.BLOODKIN);
 		// A helmet against the sun, unless a test wants it bare
-		player.equipStack(EquipmentSlot.HEAD, new ItemStack(Items.LEATHER_HELMET));
+		player.setItemSlot(EquipmentSlot.HEAD, new ItemStack(Items.LEATHER_HELMET));
 		return player;
 	}
 
-	@GameTest(templateName = EMPTY_STRUCTURE, batchId = "blood", tickLimit = 100)
-	public void bloodComesOnlyFromTheLiving(TestContext ctx) {
-		ServerWorld world = ctx.getWorld();
-		BlockPos at = ctx.getAbsolutePos(new BlockPos(2, 2, 2));
-		ServerPlayerEntity player = bloodkin(ctx, at);
+	@GameTest(template = EMPTY_STRUCTURE, batch = "blood", timeoutTicks = 100)
+	public void bloodComesOnlyFromTheLiving(GameTestHelper ctx) {
+		ServerLevel world = ctx.getLevel();
+		BlockPos at = ctx.absolutePos(new BlockPos(2, 2, 2));
+		ServerPlayer player = bloodkin(ctx, at);
 		RaceData data = RaceState.of(player);
 		data.addResource(50);
 		player.setHealth(10);
-		PigEntity pig = beast(ctx, EntityType.PIG, at.add(1, 0, 0));
-		float dealt = Bloodkin.onHit(pig, world.getDamageSources().playerAttack(player), 6);
+		Pig pig = beast(ctx, EntityType.PIG, at.offset(1, 0, 0));
+		float dealt = Bloodkin.onHit(pig, world.damageSources().playerAttack(player), 6);
 		check(dealt == 6 && Math.abs(player.getHealth() - 10.6f) < 0.01f, "a blow on a pig heals 10%: health " + player.getHealth());
 		check(Math.abs(data.resource - 56) < 0.01f, "and gives its damage in blood: " + data.resource);
-		ZombieEntity zombie = beast(ctx, EntityType.ZOMBIE, at.add(-1, 0, 0));
-		Bloodkin.onHit(zombie, world.getDamageSources().playerAttack(player), 6);
+		Zombie zombie = beast(ctx, EntityType.ZOMBIE, at.offset(-1, 0, 0));
+		Bloodkin.onHit(zombie, world.damageSources().playerAttack(player), 6);
 		check(Math.abs(data.resource - 56) < 0.01f && Math.abs(player.getHealth() - 10.6f) < 0.01f, "the undead have no blood to drink");
 		// Thirst: low blood, harder blows, no natural healing
 		data.addResource(-100);
-		check(Bloodkin.onHit(zombie, world.getDamageSources().playerAttack(player), 10) == 12, "in Thirst blows are 20% harder");
+		check(Bloodkin.onHit(zombie, world.damageSources().playerAttack(player), 10) == 12, "in Thirst blows are 20% harder");
 		check(Bloodkin.naturalHealing(player) == 0, "in Thirst natural healing stops");
 		// The ways a blow grows add up rather than multiply: Deep Thirst +35% and Execution +50% make +85%, not x2.03
 		data.talents.add(Talents.THIRST_HUNGER);
 		data.talents.add(Talents.FANG_EXECUTE);
 		zombie.setHealth(2);
-		float stacked = Bloodkin.onHit(zombie, world.getDamageSources().playerAttack(player), 10);
+		float stacked = Bloodkin.onHit(zombie, world.damageSources().playerAttack(player), 10);
 		check(Math.abs(stacked - 18.5f) < 0.01f, "bonuses add up: 10 -> 18.5, got " + stacked);
 		data.talents.remove(Talents.THIRST_HUNGER);
 		data.talents.remove(Talents.FANG_EXECUTE);
@@ -1184,16 +1184,16 @@ public class RaceGameTests implements FabricGameTest {
 		done(ctx, player);
 	}
 
-	@GameTest(templateName = EMPTY_STRUCTURE, batchId = "blood_dash", tickLimit = 100)
-	public void theDashCutsThroughAndTheHarvestDrinks(TestContext ctx) {
-		ServerWorld world = ctx.getWorld();
-		BlockPos at = ctx.getAbsolutePos(new BlockPos(4, 2, 1));
-		floor(world, at.add(-4, 0, -1), 9, 9);
-		ServerPlayerEntity player = bloodkin(ctx, at);
+	@GameTest(template = EMPTY_STRUCTURE, batch = "blood_dash", timeoutTicks = 100)
+	public void theDashCutsThroughAndTheHarvestDrinks(GameTestHelper ctx) {
+		ServerLevel world = ctx.getLevel();
+		BlockPos at = ctx.absolutePos(new BlockPos(4, 2, 1));
+		floor(world, at.offset(-4, 0, -1), 9, 9);
+		ServerPlayer player = bloodkin(ctx, at);
 		RaceData data = RaceState.of(player);
 		data.addResource(100);
 		// A spider three blocks ahead (yaw 0 looks south, +Z)
-		SpiderEntity spider = beast(ctx, EntityType.SPIDER, at.add(0, 0, 3));
+		Spider spider = beast(ctx, EntityType.SPIDER, at.offset(0, 0, 3));
 		check(Bloodkin.dash(player, data) == AbilityResult.OK, "the Blood Dash");
 		for (int i = 0; i < 6; i++) {
 			Bloodkin.tick(world.getServer());
@@ -1203,10 +1203,10 @@ public class RaceGameTests implements FabricGameTest {
 		check(Bloodkin.dash(player, data) == AbilityResult.COOLDOWN, "then it waits");
 
 		// The Harvest: two spiders around, both bleed into the Bloodkin
-		SpiderEntity other = beast(ctx, EntityType.SPIDER, at.add(2, 0, 5));
+		Spider other = beast(ctx, EntityType.SPIDER, at.offset(2, 0, 5));
 		spider.setHealth(spider.getMaxHealth());
 		// The dash's cut just landed: let its hurt frames pass, as a real moment would
-		spider.timeUntilRegen = 0;
+		spider.invulnerableTime = 0;
 		player.setHealth(10);
 		float blood = data.resource;
 		check(Bloodkin.harvest(player, data) == AbilityResult.OK, "the Harvest");
@@ -1235,7 +1235,7 @@ public class RaceGameTests implements FabricGameTest {
 	}
 
 	/** Keeps the chunks around a test loaded for entities too, so a freshly spawned mob can be found and pulled. */
-	static void holdChunks(ServerWorld world, BlockPos at) {
+	static void holdChunks(ServerLevel world, BlockPos at) {
 		for (int dx = -1; dx <= 1; dx++) {
 			for (int dz = -1; dz <= 1; dz++) {
 				world.setChunkForced((at.getX() >> 4) + dx, (at.getZ() >> 4) + dz, true);
@@ -1243,7 +1243,7 @@ public class RaceGameTests implements FabricGameTest {
 		}
 	}
 
-	static void releaseChunks(ServerWorld world, BlockPos at) {
+	static void releaseChunks(ServerLevel world, BlockPos at) {
 		for (int dx = -1; dx <= 1; dx++) {
 			for (int dz = -1; dz <= 1; dz++) {
 				world.setChunkForced((at.getX() >> 4) + dx, (at.getZ() >> 4) + dz, false);
@@ -1251,18 +1251,18 @@ public class RaceGameTests implements FabricGameTest {
 		}
 	}
 
-	static ServerPlayerEntity mercenary(TestContext ctx, BlockPos at) {
-		ServerPlayerEntity player = (ServerPlayerEntity) ctx.createMockCreativeServerPlayerInWorld();
-		player.changeGameMode(GameMode.SURVIVAL);
-		player.refreshPositionAndAngles(at.getX() + 0.5, at.getY(), at.getZ() + 0.5, 0, 0);
+	static ServerPlayer mercenary(GameTestHelper ctx, BlockPos at) {
+		ServerPlayer player = (ServerPlayer) ctx.makeMockServerPlayerInLevel();
+		player.setGameMode(GameType.SURVIVAL);
+		player.moveTo(at.getX() + 0.5, at.getY(), at.getZ() + 0.5, 0, 0);
 		RaceState.of(player).reset(Race.MERCENARY);
 		return player;
 	}
 
-	@GameTest(templateName = EMPTY_STRUCTURE, batchId = "merc_contracts", tickLimit = 100)
-	public void mercenariesGrowOnlyByContractsAndSpendTokensInTheShop(TestContext ctx) {
-		BlockPos at = ctx.getAbsolutePos(new BlockPos(2, 2, 2));
-		ServerPlayerEntity player = mercenary(ctx, at);
+	@GameTest(template = EMPTY_STRUCTURE, batch = "merc_contracts", timeoutTicks = 100)
+	public void mercenariesGrowOnlyByContractsAndSpendTokensInTheShop(GameTestHelper ctx) {
+		BlockPos at = ctx.absolutePos(new BlockPos(2, 2, 2));
+		ServerPlayer player = mercenary(ctx, at);
 		RaceData data = RaceState.of(player);
 		// Kills and every other capped source teach a Mercenary nothing
 		Progression.addXp(player, data, Progression.KILLS, 1, 60);
@@ -1278,7 +1278,7 @@ public class RaceGameTests implements FabricGameTest {
 		// A hunt: two zombies
 		Contract hunt = new Contract(Contract.Kind.HUNT, "minecraft:zombie", 2, 1, false, 10, 80);
 		data.merc.active.add(hunt);
-		ZombieEntity zombie = beast(ctx, EntityType.ZOMBIE, at.add(2, 0, 0));
+		Zombie zombie = beast(ctx, EntityType.ZOMBIE, at.offset(2, 0, 0));
 		Contracts.onKill(player, data, zombie);
 		check(hunt.progress == 1 && data.merc.tokens == 0, "one of two");
 		Contracts.onKill(player, data, zombie);
@@ -1287,9 +1287,9 @@ public class RaceGameTests implements FabricGameTest {
 		// Gathering: three iron ingots handed over from the inventory
 		Contract gather = new Contract(Contract.Kind.GATHER, "minecraft:iron_ingot", 3, 1, false, 10, 80);
 		data.merc.active.add(gather);
-		player.getInventory().insertStack(new ItemStack(Items.IRON_INGOT, 5));
+		player.getInventory().add(new ItemStack(Items.IRON_INGOT, 5));
 		check(Contracts.deliver(player, data, 0) && data.merc.active.isEmpty() && data.merc.tokens == 20, "the ingots are handed in");
-		check(player.getInventory().count(Items.IRON_INGOT) == 2, "and two stay, got " + player.getInventory().count(Items.IRON_INGOT));
+		check(player.getInventory().countItem(Items.IRON_INGOT) == 2, "and two stay, got " + player.getInventory().countItem(Items.IRON_INGOT));
 
 		// The shop: today's goods for anyone (only what's out today), learning for the Mercenary, dearer each time, three a day
 		Shop.restock(player, data);
@@ -1299,7 +1299,7 @@ public class RaceGameTests implements FabricGameTest {
 		check(!Shop.buy(player, data, "pearls"), "nothing that isn't out today");
 		data.merc.stock.add("arrows");
 		data.merc.deal = "";
-		check(Shop.buy(player, data, "arrows") && data.merc.tokens == 17 && player.getInventory().count(Items.ARROW) == 32, "arrows bought");
+		check(Shop.buy(player, data, "arrows") && data.merc.tokens == 17 && player.getInventory().countItem(Items.ARROW) == 32, "arrows bought");
 		int xpBefore = data.xp + RaceData.xpForNext(0) * data.level;
 		data.merc.tokens = 100;
 		check(Shop.buy(player, data, "learning") && data.merc.tokens == 88, "learning costs 12");
@@ -1311,70 +1311,70 @@ public class RaceGameTests implements FabricGameTest {
 		done(ctx, player);
 	}
 
-	@GameTest(templateName = EMPTY_STRUCTURE, batchId = "merc_deals", tickLimit = 100)
-	public void mercenaryDealsArePaidInHealthHungerAndArmour(TestContext ctx) {
-		ServerWorld world = ctx.getWorld();
-		BlockPos at = ctx.getAbsolutePos(new BlockPos(2, 2, 1));
-		floor(world, at.add(-2, 0, -1), 5, 6);
-		ServerPlayerEntity player = mercenary(ctx, at);
+	@GameTest(template = EMPTY_STRUCTURE, batch = "merc_deals", timeoutTicks = 100)
+	public void mercenaryDealsArePaidInHealthHungerAndArmour(GameTestHelper ctx) {
+		ServerLevel world = ctx.getLevel();
+		BlockPos at = ctx.absolutePos(new BlockPos(2, 2, 1));
+		floor(world, at.offset(-2, 0, -1), 5, 6);
+		ServerPlayer player = mercenary(ctx, at);
 		RaceData data = RaceState.of(player);
-		ZombieEntity zombie = beast(ctx, EntityType.ZOMBIE, at.add(0, 0, 3));
+		Zombie zombie = beast(ctx, EntityType.ZOMBIE, at.offset(0, 0, 3));
 		// Strike on Credit: 3 health now, the next blow doubled; with no contract in hand the cooldown is half again
 		player.setHealth(20);
-		long now = world.getServer().getTicks();
+		long now = world.getServer().getTickCount();
 		check(Mercenary.use(player, data, 0) == AbilityResult.OK && Math.abs(player.getHealth() - 17) < 0.01f, "paid 3 health, now " + player.getHealth());
 		check(data.readyAt.get(0) - now >= 240, "no contract: a longer cooldown");
-		float struck = Mercenary.onHit(zombie, world.getDamageSources().playerAttack(player), 5);
+		float struck = Mercenary.onHit(zombie, world.damageSources().playerAttack(player), 5);
 		check(Math.abs(struck - 10) < 0.01f, "the blow doubled, got " + struck);
-		check(Math.abs(Mercenary.onHit(zombie, world.getDamageSources().playerAttack(player), 5) - 5) < 0.01f, "only the one blow");
+		check(Math.abs(Mercenary.onHit(zombie, world.damageSources().playerAttack(player), 5) - 5) < 0.01f, "only the one blow");
 		player.setHealth(4);
 		data.readyAt.clear();
 		check(Mercenary.use(player, data, 0) == AbilityResult.NO_RESOURCE, "never the last of one's health");
 		player.setHealth(20);
 
 		// The Exchange: the weakness goes to the zombie, its speed comes over, hunger pays (no poison: the undead shrug it off)
-		player.addStatusEffect(new StatusEffectInstance(StatusEffects.WEAKNESS, 200, 0));
-		zombie.addStatusEffect(new StatusEffectInstance(StatusEffects.SPEED, 200, 0));
-		player.refreshPositionAndAngles(at.getX() + 0.5, at.getY(), at.getZ() + 0.5, 0, 12);
-		int food = player.getHungerManager().getFoodLevel();
+		player.addEffect(new MobEffectInstance(MobEffects.WEAKNESS, 200, 0));
+		zombie.addEffect(new MobEffectInstance(MobEffects.MOVEMENT_SPEED, 200, 0));
+		player.moveTo(at.getX() + 0.5, at.getY(), at.getZ() + 0.5, 0, 12);
+		int food = player.getFoodData().getFoodLevel();
 		check(Mercenary.use(player, data, 1) == AbilityResult.OK, "the exchange");
-		check(!player.hasStatusEffect(StatusEffects.WEAKNESS) && player.hasStatusEffect(StatusEffects.SPEED) && zombie.hasStatusEffect(StatusEffects.WEAKNESS)
-				&& player.getAbsorptionAmount() >= 4 && player.getHungerManager().getFoodLevel() == food - Mercenary.EXCHANGE_HUNGER, "effects and life traded");
+		check(!player.hasEffect(MobEffects.WEAKNESS) && player.hasEffect(MobEffects.MOVEMENT_SPEED) && zombie.hasEffect(MobEffects.WEAKNESS)
+				&& player.getAbsorptionAmount() >= 4 && player.getFoodData().getFoodLevel() == food - Mercenary.EXCHANGE_HUNGER, "effects and life traded");
 
 		// The Pledge: Resistance II for the wear of the armour
 		check(Mercenary.use(player, data, 2) == AbilityResult.HINTED, "nothing to pawn without armour");
-		player.equipStack(EquipmentSlot.CHEST, new ItemStack(Items.IRON_CHESTPLATE));
-		check(Mercenary.use(player, data, 2) == AbilityResult.OK && player.getStatusEffect(StatusEffects.RESISTANCE).getAmplifier() == 1
-				&& player.getEquippedStack(EquipmentSlot.CHEST).getDamage() > 0, "the armour pawned");
+		player.setItemSlot(EquipmentSlot.CHEST, new ItemStack(Items.IRON_CHESTPLATE));
+		check(Mercenary.use(player, data, 2) == AbilityResult.OK && player.getEffect(MobEffects.DAMAGE_RESISTANCE).getAmplifier() == 1
+				&& player.getItemBySlot(EquipmentSlot.CHEST).getDamageValue() > 0, "the armour pawned");
 		zombie.discard();
 		done(ctx, player);
 	}
 
-	static ServerPlayerEntity tempter(TestContext ctx, BlockPos at) {
-		ServerPlayerEntity player = (ServerPlayerEntity) ctx.createMockCreativeServerPlayerInWorld();
-		player.changeGameMode(GameMode.SURVIVAL);
-		player.refreshPositionAndAngles(at.getX() + 0.5, at.getY(), at.getZ() + 0.5, 0, 0);
+	static ServerPlayer tempter(GameTestHelper ctx, BlockPos at) {
+		ServerPlayer player = (ServerPlayer) ctx.makeMockServerPlayerInLevel();
+		player.setGameMode(GameType.SURVIVAL);
+		player.moveTo(at.getX() + 0.5, at.getY(), at.getZ() + 0.5, 0, 0);
 		RaceState.of(player).reset(Race.TEMPTER);
 		return player;
 	}
 
-	@GameTest(templateName = EMPTY_STRUCTURE, batchId = "tempter", tickLimit = 100)
-	public void temptersKissCharmAndSingMonstersToSleep(TestContext ctx) {
-		ServerWorld world = ctx.getWorld();
-		BlockPos at = ctx.getAbsolutePos(new BlockPos(3, 2, 1));
-		floor(world, at.add(-3, 0, -1), 7, 10);
-		ServerPlayerEntity player = tempter(ctx, at);
+	@GameTest(template = EMPTY_STRUCTURE, batch = "tempter", timeoutTicks = 100)
+	public void temptersKissCharmAndSingMonstersToSleep(GameTestHelper ctx) {
+		ServerLevel world = ctx.getLevel();
+		BlockPos at = ctx.absolutePos(new BlockPos(3, 2, 1));
+		floor(world, at.offset(-3, 0, -1), 7, 10);
+		ServerPlayer player = tempter(ctx, at);
 		RaceData data = RaceState.of(player);
 		data.addResource(100);
-		player.refreshPositionAndAngles(at.getX() + 0.5, at.getY(), at.getZ() + 0.5, 0, 20);
+		player.moveTo(at.getX() + 0.5, at.getY(), at.getZ() + 0.5, 0, 20);
 
 		// No kiss for the undead
-		ZombieEntity zombie = beast(ctx, EntityType.ZOMBIE, at.add(0, 0, 2));
+		Zombie zombie = beast(ctx, EntityType.ZOMBIE, at.offset(0, 0, 2));
 		check(Tempter.use(player, data, 0) == AbilityResult.HINTED, "no kiss for the zombie in front");
-		zombie.refreshPositionAndAngles(at.getX() - 2.5, at.getY(), at.getZ() + 6.5, 0, 0);
+		zombie.moveTo(at.getX() - 2.5, at.getY(), at.getZ() + 6.5, 0, 0);
 
 		// The Kiss drinks a spider's life and leaves it infatuated: it won't hunt her, and her blows on it land harder
-		SpiderEntity spider = beast(ctx, EntityType.SPIDER, at.add(0, 0, 2));
+		Spider spider = beast(ctx, EntityType.SPIDER, at.offset(0, 0, 2));
 		player.setHealth(10);
 		AbilityResult kissed = Tempter.use(player, data, 0);
 		check(kissed == AbilityResult.OK, "the kiss: " + kissed);
@@ -1382,26 +1382,26 @@ public class RaceGameTests implements FabricGameTest {
 		check(Tempter.infatuated(spider, player), "the spider is infatuated");
 		spider.setTarget(player);
 		check(spider.getTarget() == null, "an infatuated spider won't hunt her");
-		check(Math.abs(Tempter.onHit(spider, world.getDamageSources().playerAttack(player), 8) - 10) < 0.01f, "her blows land a quarter harder");
+		check(Math.abs(Tempter.onHit(spider, world.damageSources().playerAttack(player), 8) - 10) < 0.01f, "her blows land a quarter harder");
 
 		// The Charm: a thrall
-		SpiderEntity thrall = beast(ctx, EntityType.SPIDER, at.add(2, 0, 7));
-		player.refreshPositionAndAngles(player.getX(), player.getY(), player.getZ(), 0, 0);
-		player.lookAt(net.minecraft.command.argument.EntityAnchorArgumentType.EntityAnchor.EYES, thrall.getPos().add(0, 0.4, 0));
+		Spider thrall = beast(ctx, EntityType.SPIDER, at.offset(2, 0, 7));
+		player.moveTo(player.getX(), player.getY(), player.getZ(), 0, 0);
+		player.lookAt(net.minecraft.commands.arguments.EntityAnchorArgument.Anchor.EYES, thrall.position().add(0, 0.4, 0));
 		data.addResource(100);
 		check(Tempter.use(player, data, 2) == AbilityResult.OK && Tempter.thrall(thrall), "the charmed spider is a thrall");
 
 		// The Lullaby: hearts asleep, the undead awake; a blow wakes the sleeper, a kiss doesn't
-		SpiderEntity sleeper = beast(ctx, EntityType.SPIDER, at.add(-2, 0, 2));
+		Spider sleeper = beast(ctx, EntityType.SPIDER, at.offset(-2, 0, 2));
 		data.addResource(100);
 		check(Tempter.use(player, data, 3) == AbilityResult.OK, "the lullaby");
 		check(Tempter.asleep(sleeper) && !Tempter.asleep(zombie), "the spider sleeps, the zombie doesn't");
-		Tempter.onHit(sleeper, world.getDamageSources().mobAttack(zombie), 1);
+		Tempter.onHit(sleeper, world.damageSources().mobAttack(zombie), 1);
 		check(!Tempter.asleep(sleeper), "a blow wakes it");
 
 		// The Wings: up and away
 		data.addResource(100);
-		check(Tempter.use(player, data, 1) == AbilityResult.OK && player.getVelocity().y > 0, "the wings lift her");
+		check(Tempter.use(player, data, 1) == AbilityResult.OK && player.getDeltaMovement().y > 0, "the wings lift her");
 		zombie.discard();
 		spider.discard();
 		thrall.discard();
@@ -1409,43 +1409,43 @@ public class RaceGameTests implements FabricGameTest {
 		done(ctx, player);
 	}
 
-	static ServerPlayerEntity masked(TestContext ctx, BlockPos at) {
-		ServerPlayerEntity player = (ServerPlayerEntity) ctx.createMockCreativeServerPlayerInWorld();
-		player.changeGameMode(GameMode.SURVIVAL);
-		player.refreshPositionAndAngles(at.getX() + 0.5, at.getY(), at.getZ() + 0.5, 0, 0);
+	static ServerPlayer masked(GameTestHelper ctx, BlockPos at) {
+		ServerPlayer player = (ServerPlayer) ctx.makeMockServerPlayerInLevel();
+		player.setGameMode(GameType.SURVIVAL);
+		player.moveTo(at.getX() + 0.5, at.getY(), at.getZ() + 0.5, 0, 0);
 		RaceState.of(player).reset(Race.MASKED);
 		return player;
 	}
 
-	@GameTest(templateName = EMPTY_STRUCTURE, batchId = "masked", tickLimit = 100)
-	public void theMaskedTearFacesAndPassForTheirKind(TestContext ctx) {
-		ServerWorld world = ctx.getWorld();
-		BlockPos at = ctx.getAbsolutePos(new BlockPos(3, 2, 1));
-		floor(world, at.add(-3, 0, -1), 7, 8);
-		ServerPlayerEntity player = masked(ctx, at);
+	@GameTest(template = EMPTY_STRUCTURE, batch = "masked", timeoutTicks = 100)
+	public void theMaskedTearFacesAndPassForTheirKind(GameTestHelper ctx) {
+		ServerLevel world = ctx.getLevel();
+		BlockPos at = ctx.absolutePos(new BlockPos(3, 2, 1));
+		floor(world, at.offset(-3, 0, -1), 7, 8);
+		ServerPlayer player = masked(ctx, at);
 		RaceData data = RaceState.of(player);
-		player.refreshPositionAndAngles(at.getX() + 0.5, at.getY(), at.getZ() + 0.5, 0, 20);
-		ZombieEntity victim = beast(ctx, EntityType.ZOMBIE, at.add(0, 0, 2));
+		player.moveTo(at.getX() + 0.5, at.getY(), at.getZ() + 0.5, 0, 20);
+		Zombie victim = beast(ctx, EntityType.ZOMBIE, at.offset(0, 0, 2));
 		check(Masked.use(player, data, 0) == AbilityResult.HINTED, "a whole zombie keeps its face");
 		victim.setHealth(5);
 		check(Masked.use(player, data, 0) == AbilityResult.OK && data.masked.worn == Face.ZOMBIE, "the zombie's face goes on");
-		check(victim.isDead(), "and the zombie dies of it");
+		check(victim.isDeadOrDying(), "and the zombie dies of it");
 		Masked.tickSecond(player, data);
 		check(player.getMaxHealth() == 24, "a zombie face gives two hearts, max health " + player.getMaxHealth());
 
 		// Its kind takes the Masked for its own, others don't; a blow on one of them gives it away
-		ZombieEntity kin = beast(ctx, EntityType.ZOMBIE, at.add(2, 0, 4));
-		SpiderEntity spider = beast(ctx, EntityType.SPIDER, at.add(-2, 0, 4));
+		Zombie kin = beast(ctx, EntityType.ZOMBIE, at.offset(2, 0, 4));
+		Spider spider = beast(ctx, EntityType.SPIDER, at.offset(-2, 0, 4));
 		kin.setTarget(player);
 		spider.setTarget(player);
 		check(kin.getTarget() == null, "a zombie won't hunt a zombie face");
 		check(spider.getTarget() == player, "a spider will");
-		Masked.onHit(kin, world.getDamageSources().playerAttack(player), 1);
+		Masked.onHit(kin, world.damageSources().playerAttack(player), 1);
 		kin.setTarget(player);
 		check(kin.getTarget() == player, "after a blow the kin see through the face");
 
 		// The zombie face's power, then a second face and the change back
-		spider.refreshPositionAndAngles(at.getX() + 0.5, at.getY(), at.getZ() + 2.5, 0, 0);
+		spider.moveTo(at.getX() + 0.5, at.getY(), at.getZ() + 2.5, 0, 0);
 		data.addResource(100);
 		float health = spider.getHealth();
 		check(Masked.use(player, data, 1) == AbilityResult.OK && spider.getHealth() < health, "the dead grip");
@@ -1464,114 +1464,114 @@ public class RaceGameTests implements FabricGameTest {
 		done(ctx, player);
 	}
 
-	static ServerPlayerEntity voidborn(TestContext ctx, BlockPos at) {
-		ServerPlayerEntity player = (ServerPlayerEntity) ctx.createMockCreativeServerPlayerInWorld();
-		player.changeGameMode(GameMode.SURVIVAL);
-		player.refreshPositionAndAngles(at.getX() + 0.5, at.getY(), at.getZ() + 0.5, 0, 0);
+	static ServerPlayer voidborn(GameTestHelper ctx, BlockPos at) {
+		ServerPlayer player = (ServerPlayer) ctx.makeMockServerPlayerInLevel();
+		player.setGameMode(GameType.SURVIVAL);
+		player.moveTo(at.getX() + 0.5, at.getY(), at.getZ() + 0.5, 0, 0);
 		RaceState.of(player).reset(Race.VOIDBORN);
 		RaceState.of(player).addResource(100);
 		return player;
 	}
 
-	@GameTest(templateName = EMPTY_STRUCTURE, batchId = "void_step", tickLimit = 100)
-	public void theVoidStepPassesThroughWallsButNeverIntoThem(TestContext ctx) {
-		ServerWorld world = ctx.getWorld();
-		BlockPos at = ctx.getAbsolutePos(new BlockPos(3, 2, 1));
-		floor(world, at.add(-2, 0, -1), 5, 28);
+	@GameTest(template = EMPTY_STRUCTURE, batch = "void_step", timeoutTicks = 100)
+	public void theVoidStepPassesThroughWallsButNeverIntoThem(GameTestHelper ctx) {
+		ServerLevel world = ctx.getLevel();
+		BlockPos at = ctx.absolutePos(new BlockPos(3, 2, 1));
+		floor(world, at.offset(-2, 0, -1), 5, 28);
 		// A wall three blocks thick, two blocks ahead (yaw 0 looks south, +Z)
 		for (int dx = -2; dx <= 2; dx++) {
 			for (int dy = 0; dy <= 3; dy++) {
 				for (int dz = 2; dz <= 4; dz++) {
-					world.setBlockState(at.add(dx, dy, dz), Blocks.STONE.getDefaultState());
+					world.setBlockAndUpdate(at.offset(dx, dy, dz), Blocks.STONE.defaultBlockState());
 				}
 			}
 		}
-		ServerPlayerEntity player = voidborn(ctx, at);
+		ServerPlayer player = voidborn(ctx, at);
 		RaceData data = RaceState.of(player);
 		check(Voidborn.step(player, data) == AbilityResult.OK, "the Void Step");
 		check(Voidborn.phasing(player), "the body passes through matter while it goes");
-		ctx.runAtTick(ctx.getTick() + 14, () -> {
+		ctx.runAtTickTime(ctx.getTick() + 14, () -> {
 			check(!Voidborn.phasing(player), "and is solid again after");
 			check(player.getZ() > at.getZ() + 5, "it came out past the wall, at z+" + (player.getZ() - at.getZ()));
-			check(world.isSpaceEmpty(player, player.getBoundingBox()), "and not inside a block");
+			check(world.noCollision(player, player.getBoundingBox()), "and not inside a block");
 			done(ctx, player);
 		});
 	}
 
-	@GameTest(templateName = EMPTY_STRUCTURE, batchId = "void_stuck", tickLimit = 100)
-	public void theVoidStepNeverLeavesTheBodyInRockOrPastBedrock(TestContext ctx) {
-		ServerWorld world = ctx.getWorld();
-		BlockPos at = ctx.getAbsolutePos(new BlockPos(3, 2, 1));
-		floor(world, at.add(-2, 0, -1), 5, 28);
+	@GameTest(template = EMPTY_STRUCTURE, batch = "void_stuck", timeoutTicks = 100)
+	public void theVoidStepNeverLeavesTheBodyInRockOrPastBedrock(GameTestHelper ctx) {
+		ServerLevel world = ctx.getLevel();
+		BlockPos at = ctx.absolutePos(new BlockPos(3, 2, 1));
+		floor(world, at.offset(-2, 0, -1), 5, 28);
 		// Solid rock all the way ahead: nowhere to come out, so it doesn't go and costs nothing
 		for (int dx = -2; dx <= 2; dx++) {
 			for (int dy = -1; dy <= 4; dy++) {
 				for (int dz = 1; dz <= 26; dz++) {
-					world.setBlockState(at.add(dx, dy, dz), Blocks.STONE.getDefaultState());
+					world.setBlockAndUpdate(at.offset(dx, dy, dz), Blocks.STONE.defaultBlockState());
 				}
 			}
 		}
-		ServerPlayerEntity player = voidborn(ctx, at);
+		ServerPlayer player = voidborn(ctx, at);
 		RaceData data = RaceState.of(player);
 		check(Voidborn.step(player, data) == AbilityResult.NO_SPACE && data.resource == 100, "no room anywhere ahead: no step, no cost");
 		// Bedrock: the step stops short of it, it never passes through
 		for (int dx = -2; dx <= 2; dx++) {
 			for (int dy = -1; dy <= 4; dy++) {
 				for (int dz = 1; dz <= 26; dz++) {
-					world.setBlockState(at.add(dx, dy, dz), dz == 3 ? Blocks.BEDROCK.getDefaultState() : dy == -1 ? Blocks.STONE.getDefaultState()
-							: Blocks.AIR.getDefaultState());
+					world.setBlockAndUpdate(at.offset(dx, dy, dz), dz == 3 ? Blocks.BEDROCK.defaultBlockState() : dy == -1 ? Blocks.STONE.defaultBlockState()
+							: Blocks.AIR.defaultBlockState());
 				}
 			}
 		}
 		check(Voidborn.step(player, data) == AbilityResult.OK, "the step towards bedrock");
-		ctx.runAtTick(ctx.getTick() + 14, () -> {
+		ctx.runAtTickTime(ctx.getTick() + 14, () -> {
 			check(player.getZ() < at.getZ() + 3, "it stopped before the bedrock, at z+" + (player.getZ() - at.getZ()));
-			check(world.isSpaceEmpty(player, player.getBoundingBox()), "and stands free");
+			check(world.noCollision(player, player.getBoundingBox()), "and stands free");
 			done(ctx, player);
 		});
 	}
 
-	@GameTest(templateName = EMPTY_STRUCTURE, batchId = "void_well", tickLimit = 120)
-	public void theWellDrawsEnemiesIn(TestContext ctx) {
-		ServerWorld world = ctx.getWorld();
-		BlockPos at = ctx.getAbsolutePos(new BlockPos(4, 2, 1));
-		floor(world, at.add(-4, 0, -1), 9, 14);
+	@GameTest(template = EMPTY_STRUCTURE, batch = "void_well", timeoutTicks = 120)
+	public void theWellDrawsEnemiesIn(GameTestHelper ctx) {
+		ServerLevel world = ctx.getLevel();
+		BlockPos at = ctx.absolutePos(new BlockPos(4, 2, 1));
+		floor(world, at.offset(-4, 0, -1), 9, 14);
 		// A block to aim at: the Well opens in front of it
-		world.setBlockState(at.add(0, 1, 8), Blocks.STONE.getDefaultState());
-		ServerPlayerEntity player = voidborn(ctx, at);
-		ZombieEntity zombie = EntityType.ZOMBIE.create(world);
-		zombie.refreshPositionAndAngles(at.getX() + 4.5, at.getY(), at.getZ() + 6.5, 0, 0);
-		world.spawnEntity(zombie);
+		world.setBlockAndUpdate(at.offset(0, 1, 8), Blocks.STONE.defaultBlockState());
+		ServerPlayer player = voidborn(ctx, at);
+		Zombie zombie = EntityType.ZOMBIE.create(world);
+		zombie.moveTo(at.getX() + 4.5, at.getY(), at.getZ() + 6.5, 0, 0);
+		world.addFreshEntity(zombie);
 		holdChunks(world, at);
-		ctx.runAtTick(ctx.getTick() + 5, () -> {
-			Vec3d center = new Vec3d(at.getX() + 0.5, at.getY() + 1.62, at.getZ() + 6.5);
+		ctx.runAtTickTime(ctx.getTick() + 5, () -> {
+			Vec3 center = new Vec3(at.getX() + 0.5, at.getY() + 1.62, at.getZ() + 6.5);
 			// Opened at a known spot; aiming it is the client harness's part
 			Voidborn.openWell(player, RaceState.of(player), center);
-			zombie.setVelocity(Vec3d.ZERO);
+			zombie.setDeltaMovement(Vec3.ZERO);
 			Voidborn.tick(world.getServer());
-			Vec3d toCenter = center.subtract(zombie.getBoundingBox().getCenter()).normalize();
-			check(zombie.getVelocity().dotProduct(toCenter) > 0.05, "the zombie is pulled towards the Well: " + zombie.getVelocity() + ", zombie at "
-					+ zombie.getPos() + " removed " + zombie.isRemoved() + ", player at " + player.getPos() + " removed " + player.isRemoved()
-					+ ", zombies found near " + world.getEntitiesByClass(ZombieEntity.class, new Box(center, center).expand(8), z -> true).size());
+			Vec3 toCenter = center.subtract(zombie.getBoundingBox().getCenter()).normalize();
+			check(zombie.getDeltaMovement().dot(toCenter) > 0.05, "the zombie is pulled towards the Well: " + zombie.getDeltaMovement() + ", zombie at "
+					+ zombie.position() + " removed " + zombie.isRemoved() + ", player at " + player.position() + " removed " + player.isRemoved()
+					+ ", zombies found near " + world.getEntitiesOfClass(Zombie.class, new AABB(center, center).inflate(8), z -> true).size());
 			zombie.discard();
 			releaseChunks(world, at);
 			done(ctx, player);
 		});
 	}
 
-	@GameTest(templateName = EMPTY_STRUCTURE, batchId = "void_excise", tickLimit = 120)
-	public void theExcisionTakesACreatureAwayAndBringsItBack(TestContext ctx) {
-		ServerWorld world = ctx.getWorld();
-		BlockPos at = ctx.getAbsolutePos(new BlockPos(3, 2, 1));
-		floor(world, at.add(-2, 0, -1), 5, 8);
-		ServerPlayerEntity player = voidborn(ctx, at);
+	@GameTest(template = EMPTY_STRUCTURE, batch = "void_excise", timeoutTicks = 120)
+	public void theExcisionTakesACreatureAwayAndBringsItBack(GameTestHelper ctx) {
+		ServerLevel world = ctx.getLevel();
+		BlockPos at = ctx.absolutePos(new BlockPos(3, 2, 1));
+		floor(world, at.offset(-2, 0, -1), 5, 8);
+		ServerPlayer player = voidborn(ctx, at);
 		RaceData data = RaceState.of(player);
-		ZombieEntity zombie = beast(ctx, EntityType.ZOMBIE, at.add(0, 0, 4));
+		Zombie zombie = beast(ctx, EntityType.ZOMBIE, at.offset(0, 0, 4));
 		// The chunks held for entities, and a few ticks for the zombie to settle before it is looked at
 		holdChunks(world, at);
-		ctx.runAtTick(ctx.getTick() + 5, () -> {
-			UUID id = zombie.getUuid();
-			ServerWorld pocket = Pocket.world(world.getServer());
+		ctx.runAtTickTime(ctx.getTick() + 5, () -> {
+			UUID id = zombie.getUUID();
+			ServerLevel pocket = Pocket.world(world.getServer());
 			// The zombie itself; aiming at it is the client harness's part
 			AbilityResult result = Voidborn.excise(player, data, zombie);
 			// The test server is made from a preset without datapack dimensions: there the Excision just refuses (the
@@ -1586,12 +1586,12 @@ public class RaceGameTests implements FabricGameTest {
 			}
 			check(result == AbilityResult.OK, "the Excision: " + result);
 			check(world.getEntity(id) == null && pocket.getEntity(id) != null, "the zombie is in the pocket now");
-			check(pocket.getBlockState(BlockPos.ofFloored(Pocket.center(data.voidborn.room)).down()).isOf(Blocks.AMETHYST_BLOCK), "the room was laid");
+			check(pocket.getBlockState(BlockPos.containing(Pocket.center(data.voidborn.room)).down()).isOf(Blocks.AMETHYST_BLOCK), "the room was laid");
 			// Leaving the race lets go of whatever it held: it comes back where it was
 			Voidborn.cleanup(player);
-			ctx.runAtTick(ctx.getTick() + 3, () -> {
+			ctx.runAtTickTime(ctx.getTick() + 3, () -> {
 				Entity back = world.getEntity(id);
-				check(back != null && back.getPos().distanceTo(Vec3d.ofBottomCenter(at.add(0, 0, 4))) < 0.5, "back on its spot: " + back);
+				check(back != null && back.position().distanceTo(Vec3.atBottomCenterOf(at.offset(0, 0, 4))) < 0.5, "back on its spot: " + back);
 				back.discard();
 				releaseChunks(world, at);
 				done(ctx, player);
@@ -1599,15 +1599,15 @@ public class RaceGameTests implements FabricGameTest {
 		});
 	}
 
-	@GameTest(templateName = EMPTY_STRUCTURE, batchId = "void_body", tickLimit = 100)
-	public void waterBurnsAndBedsRefuseAVoidborn(TestContext ctx) {
-		ServerWorld world = ctx.getWorld();
-		BlockPos at = ctx.getAbsolutePos(new BlockPos(2, 2, 2));
-		floor(world, at.add(-1, 0, -1), 3, 3);
-		world.setBlockState(at, Blocks.WATER.getDefaultState());
-		ServerPlayerEntity player = voidborn(ctx, at);
-		ctx.runAtTick(ctx.getTick() + 70, () -> {
-			player.timeUntilRegen = 0;
+	@GameTest(template = EMPTY_STRUCTURE, batch = "void_body", timeoutTicks = 100)
+	public void waterBurnsAndBedsRefuseAVoidborn(GameTestHelper ctx) {
+		ServerLevel world = ctx.getLevel();
+		BlockPos at = ctx.absolutePos(new BlockPos(2, 2, 2));
+		floor(world, at.offset(-1, 0, -1), 3, 3);
+		world.setBlockAndUpdate(at, Blocks.WATER.defaultBlockState());
+		ServerPlayer player = voidborn(ctx, at);
+		ctx.runAtTickTime(ctx.getTick() + 70, () -> {
+			player.invulnerableTime = 0;
 			player.setHealth(20);
 			Voidborn.tickSecond(player, RaceState.of(player));
 			check(player.getHealth() < 20, "water burns: " + player.getHealth());
@@ -1619,7 +1619,7 @@ public class RaceGameTests implements FabricGameTest {
 
 	private static void check(boolean condition, String message) {
 		if (!condition) {
-			throw new GameTestException(message);
+			throw new GameTestAssertException(message);
 		}
 	}
 }

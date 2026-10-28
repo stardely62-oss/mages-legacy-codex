@@ -1,6 +1,6 @@
 package euf.mageslegacy.race;
 
-import net.minecraft.item.Item;
+import net.minecraft.world.item.Item;
 
 /**
  * One node of a race's talent tree. Its name, lore line and effect text live in the language files under

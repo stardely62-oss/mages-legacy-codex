@@ -1,15 +1,15 @@
 package euf.mageslegacy.shepherd;
 
-import net.minecraft.item.ItemStack;
-import net.minecraft.item.Items;
-import net.minecraft.util.math.random.Random;
+import net.minecraft.util.RandomSource;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 
 /** What a bonded fox digs up now and then: mostly trifles, sometimes something worth it. */
 final class FoxFinds {
 	private FoxFinds() {
 	}
 
-	static ItemStack roll(Random random) {
+	static ItemStack roll(RandomSource random) {
 		int r = random.nextInt(100);
 		if (r < 25) {
 			return new ItemStack(Items.BONE, 2);

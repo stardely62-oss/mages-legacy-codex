@@ -1,9 +1,9 @@
 package euf.mageslegacy.mixin.client;
 
+import com.mojang.blaze3d.vertex.PoseStack;
 import euf.mageslegacy.client.FxRenderer;
-import net.minecraft.client.render.Camera;
-import net.minecraft.client.render.GameRenderer;
-import net.minecraft.client.util.math.MatrixStack;
+import net.minecraft.client.Camera;
+import net.minecraft.client.renderer.GameRenderer;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -15,7 +15,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 public class GameRendererMixin {
 	/** Where a hurt tilts the view, the abilities shake it. */
 	@Inject(method = "tiltViewWhenHurt", at = @At("HEAD"))
-	private void mages_legacy$shake(MatrixStack matrices, float tickDelta, CallbackInfo ci) {
+	private void mages_legacy$shake(PoseStack matrices, float tickDelta, CallbackInfo ci) {
 		FxRenderer.shake(matrices, tickDelta);
 	}
 

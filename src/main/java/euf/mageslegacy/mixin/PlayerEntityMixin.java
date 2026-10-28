@@ -6,12 +6,12 @@ import euf.mageslegacy.race.Race;
 import euf.mageslegacy.race.RaceData;
 import euf.mageslegacy.race.RaceState;
 import euf.mageslegacy.voidborn.Voidborn;
-import net.minecraft.entity.player.PlayerEntity;
-import net.minecraft.item.FoodComponent;
-import net.minecraft.item.Item;
-import net.minecraft.item.ItemStack;
-import net.minecraft.server.network.ServerPlayerEntity;
-import net.minecraft.world.World;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.food.FoodProperties;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.Level;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
@@ -20,7 +20,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 /** Lets races react to the food a player eats (Mycelids: stews feed spores, meat feeds half), and Voidborn pass through walls. */
-@Mixin(PlayerEntity.class)
+@Mixin(Player.class)
 public abstract class PlayerEntityMixin {
 	@Unique
 	private Item mages_legacy$eating;
@@ -28,27 +28,27 @@ public abstract class PlayerEntityMixin {
 	/** A Voidborn in the middle of a Void Step moves through solid blocks. */
 	@Inject(method = "tickMovement", at = @At("HEAD"))
 	private void mages_legacy$phase(CallbackInfo ci) {
-		PlayerEntity self = (PlayerEntity) (Object) this;
+		Player self = (Player) (Object) this;
 		if (Voidborn.phasing(self)) {
-			self.noClip = true;
+			self.noPhysics = true;
 		}
 	}
 
 	@Inject(method = "eatFood", at = @At("HEAD"))
-	private void mages_legacy$beforeEat(World world, ItemStack stack, CallbackInfoReturnable<ItemStack> cir) {
+	private void mages_legacy$beforeEat(Level world, ItemStack stack, CallbackInfoReturnable<ItemStack> cir) {
 		// Remember the item now: eating shrinks the stack, and a stew turns into a bowl
-		mages_legacy$eating = stack.isFood() ? stack.getItem() : null;
+		mages_legacy$eating = stack.isEdible() ? stack.getItem() : null;
 	}
 
 	@Inject(method = "eatFood", at = @At("RETURN"))
-	private void mages_legacy$afterEat(World world, ItemStack stack, CallbackInfoReturnable<ItemStack> cir) {
+	private void mages_legacy$afterEat(Level world, ItemStack stack, CallbackInfoReturnable<ItemStack> cir) {
 		Item item = mages_legacy$eating;
 		mages_legacy$eating = null;
-		if (item == null || !((Object) this instanceof ServerPlayerEntity player)) {
+		if (item == null || !((Object) this instanceof ServerPlayer player)) {
 			return;
 		}
 		RaceData data = RaceState.of(player);
-		FoodComponent food = item.getFoodComponent();
+		FoodProperties food = item.getFoodProperties();
 		if (data != null && data.race == Race.MYCELID && food != null) {
 			Mycelid.afterEating(player, data, item, food);
 		}

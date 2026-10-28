@@ -12,16 +12,16 @@ import euf.mageslegacy.shepherd.Shepherd;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import net.minecraft.client.gui.DrawContext;
-import net.minecraft.client.gui.screen.Screen;
-import net.minecraft.client.gui.widget.TextFieldWidget;
-import net.minecraft.nbt.NbtCompound;
-import net.minecraft.nbt.NbtElement;
-import net.minecraft.nbt.NbtList;
-import net.minecraft.text.Text;
-import net.minecraft.util.Formatting;
-import net.minecraft.util.Language;
-import net.minecraft.util.math.MathHelper;
+import net.minecraft.ChatFormatting;
+import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.components.EditBox;
+import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.locale.Language;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.ListTag;
+import net.minecraft.nbt.Tag;
+import net.minecraft.network.chat.Component;
+import net.minecraft.util.Mth;
 
 /**
  * The Shepherd's bestiary. Left: three squads of echoes on tabs (the Call brings the active one all at once), the
@@ -37,25 +37,25 @@ public class BestiaryScreen extends Screen {
 	private int echoScroll;
 	/** The bonded beast being renamed, or -1; the field sits over its row. */
 	private int renaming = -1;
-	private TextFieldWidget nameField;
+	private EditBox nameField;
 
 	public BestiaryScreen() {
-		super(Text.translatable("mages_legacy.bestiary.title"));
+		super(Component.translatable("mages_legacy.bestiary.title"));
 	}
 
 	@Override
 	protected void init() {
-		nameField = addDrawableChild(new TextFieldWidget(textRenderer, 0, 0, 100, 10, Text.translatable("mages_legacy.bestiary.name")));
+		nameField = addRenderableWidget(new EditBox(font, 0, 0, 100, 10, Component.translatable("mages_legacy.bestiary.name")));
 		nameField.setMaxLength(24);
-		nameField.setDrawsBackground(false);
-		nameField.setEditableColor(LegacyUi.TEXT);
+		nameField.setBordered(false);
+		nameField.setTextColor(LegacyUi.TEXT);
 		nameField.visible = false;
 		renaming = -1;
 	}
 
 	private void finishRename() {
 		if (renaming >= 0) {
-			MagesLegacyClient.renameBeast(renaming, nameField.getText());
+			MagesLegacyClient.renameBeast(renaming, nameField.getValue());
 		}
 		renaming = -1;
 		nameField.visible = false;
@@ -87,7 +87,7 @@ public class BestiaryScreen extends Screen {
 		return new int[] {rightX(), top() + 12 + index * 23, beastWidth()};
 	}
 
-	private NbtCompound extra() {
+	private CompoundTag extra() {
 		return ClientRaceState.extra;
 	}
 
@@ -158,7 +158,7 @@ public class BestiaryScreen extends Screen {
 		}
 		finishRename();
 		// A bonded beast: left click names it, right click makes it the leader
-		NbtList bonds = extra().getList("bonds", NbtElement.COMPOUND_TYPE);
+		ListTag bonds = extra().getList("bonds", Tag.TAG_COMPOUND);
 		for (int i = 0; i < bonds.size(); i++) {
 			int[] r = beastRow(i);
 			if (mouseX >= r[0] && mouseX < r[0] + r[2] && mouseY >= r[1] && mouseY < r[1] + 20) {
@@ -169,7 +169,7 @@ public class BestiaryScreen extends Screen {
 					nameField.setX(r[0] + 21);
 					nameField.setY(r[1] + 3);
 					nameField.setWidth(r[2] - 60);
-					nameField.setText(bonds.getCompound(i).getString("name"));
+					nameField.setValue(bonds.getCompound(i).getString("name"));
 					nameField.visible = true;
 					setFocused(nameField);
 					nameField.setFocused(true);
@@ -204,7 +204,7 @@ public class BestiaryScreen extends Screen {
 	@Override
 	public boolean mouseScrolled(double mouseX, double mouseY, double amount) {
 		if (mouseX < leftX() + colWidth()) {
-			echoScroll = MathHelper.clamp(echoScroll - (int) (amount * 20), 0, maxScroll());
+			echoScroll = Mth.clamp(echoScroll - (int) (amount * 20), 0, maxScroll());
 			return true;
 		}
 		return super.mouseScrolled(mouseX, mouseY, amount);
@@ -216,34 +216,34 @@ public class BestiaryScreen extends Screen {
 	}
 
 	@Override
-	public void render(DrawContext ctx, int mouseX, int mouseY, float delta) {
+	public void render(GuiGraphics ctx, int mouseX, int mouseY, float delta) {
 		int color = LegacyUi.argb(Race.SHEPHERD.color);
 		LegacyUi.background(ctx, width, height, Race.SHEPHERD);
-		LegacyUi.heading(ctx, title.copy().formatted(Formatting.BOLD), width / 2, 8, LegacyUi.GOLD);
+		LegacyUi.heading(ctx, title.copy().withStyle(ChatFormatting.BOLD), width / 2, 8, LegacyUi.GOLD);
 		int used = extra().getInt("capUsed");
 		int max = extra().getInt("capMax");
-		Text cap = Text.translatable("mages_legacy.bestiary.capacity", used, max);
-		ctx.drawCenteredTextWithShadow(textRenderer, cap, width / 2, 21, used >= max ? LegacyUi.RED : LegacyUi.GOLD);
+		Component cap = Component.translatable("mages_legacy.bestiary.capacity", used, max);
+		ctx.drawCenteredString(font, cap, width / 2, 21, used >= max ? LegacyUi.RED : LegacyUi.GOLD);
 
-		echoScroll = MathHelper.clamp(echoScroll, 0, maxScroll());
-		List<Text> tooltip = drawEchoes(ctx, color, mouseX, mouseY);
-		List<Text> beastTooltip = drawBeasts(ctx, color, mouseX, mouseY);
+		echoScroll = Mth.clamp(echoScroll, 0, maxScroll());
+		List<Component> tooltip = drawEchoes(ctx, color, mouseX, mouseY);
+		List<Component> beastTooltip = drawBeasts(ctx, color, mouseX, mouseY);
 		super.render(ctx, mouseX, mouseY, delta);
 		if (tooltip != null) {
-			ctx.drawTooltip(textRenderer, tooltip, mouseX, mouseY);
+			ctx.renderComponentTooltip(font, tooltip, mouseX, mouseY);
 		} else if (beastTooltip != null) {
-			ctx.drawTooltip(textRenderer, beastTooltip, mouseX, mouseY);
+			ctx.renderComponentTooltip(font, beastTooltip, mouseX, mouseY);
 		}
 	}
 
-	private List<Text> drawEchoes(DrawContext ctx, int color, int mouseX, int mouseY) {
+	private List<Component> drawEchoes(GuiGraphics ctx, int color, int mouseX, int mouseY) {
 		int x = leftX();
 		int w = colWidth();
 		LegacyUi.panel(ctx, x - 6, top() - 6, x + w + 6, height - 8);
-		ctx.drawTextWithShadow(textRenderer, Text.translatable("mages_legacy.bestiary.echoes").formatted(Formatting.BOLD), x, top(), SPIRIT);
-		Text hint = Text.translatable("mages_legacy.bestiary.squad_hint");
-		ctx.drawTextWithShadow(textRenderer, hint, x + w - textRenderer.getWidth(hint), top(), LegacyUi.MUTED);
-		List<Text> tooltip = null;
+		ctx.drawString(font, Component.translatable("mages_legacy.bestiary.echoes").withStyle(ChatFormatting.BOLD), x, top(), SPIRIT);
+		Component hint = Component.translatable("mages_legacy.bestiary.squad_hint");
+		ctx.drawString(font, hint, x + w - font.width(hint), top(), LegacyUi.MUTED);
+		List<Component> tooltip = null;
 
 		// Squad tabs, then the active squad's make-up and price
 		for (int i = 0; i < 3; i++) {
@@ -251,17 +251,17 @@ public class BestiaryScreen extends Screen {
 			boolean on = i == active();
 			boolean hot = mouseX >= t[0] && mouseX < t[0] + t[2] && mouseY >= t[1] && mouseY < t[1] + 13;
 			LegacyUi.button(ctx, t[0], t[1], t[2], 13, true, hot, on, SPIRIT);
-			ctx.drawCenteredTextWithShadow(textRenderer, Text.translatable("mages_legacy.bestiary.squad", Shepherd.ROMAN[i]), t[0] + t[2] / 2, t[1] + 3,
+			ctx.drawCenteredString(font, Component.translatable("mages_legacy.bestiary.squad", Shepherd.ROMAN[i]), t[0] + t[2] / 2, t[1] + 3,
 					on ? 0xFFFFFFFF : LegacyUi.MUTED);
 		}
 		int sy = top() + 30;
 		Map<String, Integer> squad = RaceHud.activeSquad();
-		NbtCompound alive = extra().getCompound("alive");
+		CompoundTag alive = extra().getCompound("alive");
 		int ix = x;
 		int voice = 0;
 		int slots = 0;
 		if (squad.isEmpty()) {
-			ctx.drawTextWithShadow(textRenderer, Text.translatable("mages_legacy.bestiary.squad_empty").formatted(Formatting.ITALIC), x, sy + 4,
+			ctx.drawString(font, Component.translatable("mages_legacy.bestiary.squad_empty").withStyle(ChatFormatting.ITALIC), x, sy + 4,
 					LegacyUi.MUTED);
 		}
 		for (Map.Entry<String, Integer> e : squad.entrySet()) {
@@ -277,12 +277,12 @@ public class BestiaryScreen extends Screen {
 			LegacyUi.portrait(ctx, "echo", type.path(), type.icon(), ix, sy, true);
 			String count = "×" + e.getValue();
 			boolean all = type.units(alive.getInt(e.getKey())) >= e.getValue();
-			ctx.drawTextWithShadow(textRenderer, count, ix + 16, sy + 5, all ? LegacyUi.GREEN : 0xFFFFFFFF);
-			ix += 20 + textRenderer.getWidth(count);
+			ctx.drawString(font, count, ix + 16, sy + 5, all ? LegacyUi.GREEN : 0xFFFFFFFF);
+			ix += 20 + font.width(count);
 		}
 		if (!squad.isEmpty()) {
 			String price = voice + "  ◆" + slots;
-			ctx.drawTextWithShadow(textRenderer, price, x + w - textRenderer.getWidth(price), sy + 5, slots > extra().getInt("capMax") ? LegacyUi.RED : SPIRIT);
+			ctx.drawString(font, price, x + w - font.width(price), sy + 5, slots > extra().getInt("capMax") ? LegacyUi.RED : SPIRIT);
 		}
 
 		// Every echo; left click adds to the squad, right click takes away
@@ -305,30 +305,30 @@ public class BestiaryScreen extends Screen {
 			LegacyUi.portrait(ctx, "echo", type.path(), type.icon(), p[0] + 3, p[1] + 3, known);
 			// A portrait dims by itself; only a spawn egg standing in for one needs the veil
 			if (!known && !LegacyUi.exists(LegacyUi.gui("echo/" + type.path()))) {
-				ctx.getMatrices().push();
-				ctx.getMatrices().translate(0, 0, 200);
+				ctx.pose().pushPose();
+				ctx.pose().translate(0, 0, 200);
 				ctx.fill(p[0] + 3, p[1] + 3, p[0] + 19, p[1] + 19, 0xA0000000);
-				ctx.getMatrices().pop();
+				ctx.pose().popPose();
 			}
 			int tx = p[0] + 22;
 			int tw = cardW() - 25;
 			String badge = inSquad > 0 ? "×" + inSquad : "";
-			int nameW = tw - (badge.isEmpty() ? 0 : textRenderer.getWidth(badge) + 3);
-			ctx.drawTextWithShadow(textRenderer, textRenderer.trimToWidth(type.type().getName().getString(), nameW), tx, p[1] + 3,
+			int nameW = tw - (badge.isEmpty() ? 0 : font.width(badge) + 3);
+			ctx.drawString(font, font.plainSubstrByWidth(type.type().getDescription().getString(), nameW), tx, p[1] + 3,
 					known ? LegacyUi.TEXT : LegacyUi.MUTED);
 			if (!badge.isEmpty()) {
-				ctx.drawTextWithShadow(textRenderer, badge, tx + tw - textRenderer.getWidth(badge), p[1] + 3, SPIRIT);
+				ctx.drawString(font, badge, tx + tw - font.width(badge), p[1] + 3, SPIRIT);
 			}
 			int kills = Math.min(extra().getCompound("kills").getInt(type.id()), type.killsNeeded());
 			if (known) {
 				String price = type.voiceCost(quiet()) + "  ◆" + type.capacity() + (type.group() > 1 ? "  (" + type.group() + ")" : "");
-				ctx.drawTextWithShadow(textRenderer, price, tx, p[1] + 12, SPIRIT);
+				ctx.drawString(font, price, tx, p[1] + 12, SPIRIT);
 			} else {
 				// Progress towards learning it: the count, and a thin bar beside it that fills with kills
 				int need = type.killsNeeded();
 				String count = kills + "/" + need;
-				ctx.drawTextWithShadow(textRenderer, count, tx, p[1] + 12, LegacyUi.MUTED);
-				int bx = tx + textRenderer.getWidth(count) + 4;
+				ctx.drawString(font, count, tx, p[1] + 12, LegacyUi.MUTED);
+				int bx = tx + font.width(count) + 4;
 				int bw = Math.max(4, tx + tw - bx);
 				ctx.fill(bx, p[1] + 14, bx + bw, p[1] + 17, LegacyUi.BLACK);
 				ctx.fill(bx, p[1] + 14, bx + bw * kills / need, p[1] + 17, LegacyUi.mix(color, SPIRIT, 0.5f));
@@ -346,22 +346,22 @@ public class BestiaryScreen extends Screen {
 	}
 
 	/** The bonded beasts, those listening to a Song, and who can be bonded; returns the tooltip under the mouse. */
-	private List<Text> drawBeasts(DrawContext ctx, int color, int mouseX, int mouseY) {
-		List<Text> tooltip = null;
+	private List<Component> drawBeasts(GuiGraphics ctx, int color, int mouseX, int mouseY) {
+		List<Component> tooltip = null;
 		int x = rightX();
 		int w = beastWidth();
 		LegacyUi.panel(ctx, x - 6, top() - 6, x + w + 6, height - 8);
-		ctx.drawTextWithShadow(textRenderer, Text.translatable("mages_legacy.bestiary.beasts").formatted(Formatting.BOLD), x, top(), color);
+		ctx.drawString(font, Component.translatable("mages_legacy.bestiary.beasts").withStyle(ChatFormatting.BOLD), x, top(), color);
 		// How to bond and care, behind a "?" in the corner: the column keeps its room for the beasts themselves
 		int qx = x + w - 11;
 		boolean helpHot = mouseX >= qx && mouseX < qx + 11 && mouseY >= top() - 2 && mouseY < top() + 9;
 		LegacyUi.button(ctx, qx, top() - 2, 11, 11, true, helpHot, false, color);
-		ctx.drawCenteredTextWithShadow(textRenderer, "?", qx + 6, top(), helpHot ? 0xFFFFFFFF : LegacyUi.GOLD);
+		ctx.drawCenteredString(font, "?", qx + 6, top(), helpHot ? 0xFFFFFFFF : LegacyUi.GOLD);
 		if (helpHot) {
 			tooltip = new ArrayList<>();
-			tooltip.add(Text.translatable("mages_legacy.bestiary.help").formatted(Formatting.GOLD, Formatting.BOLD));
-			for (Text step : Lines.of("mages_legacy.bestiary.ritual", MagesLegacyClient.keyLabel(MagesLegacyClient.ABILITY_KEYS[Bonds.SONG_SLOT]))) {
-				TalentScreen.wrapInto(tooltip, step.copy().formatted(Formatting.WHITE));
+			tooltip.add(Component.translatable("mages_legacy.bestiary.help").withStyle(ChatFormatting.GOLD, ChatFormatting.BOLD));
+			for (Component step : Lines.of("mages_legacy.bestiary.ritual", MagesLegacyClient.keyLabel(MagesLegacyClient.ABILITY_KEYS[Bonds.SONG_SLOT]))) {
+				TalentScreen.wrapInto(tooltip, step.copy().withStyle(ChatFormatting.WHITE));
 			}
 		}
 		int y = top() + 12;
@@ -372,10 +372,10 @@ public class BestiaryScreen extends Screen {
 		int bottomH = 8 + 12 + iconRows * 19;
 		int bottomY = height - 14 - bottomH;
 
-		NbtList bonds = extra().getList("bonds", NbtElement.COMPOUND_TYPE);
+		ListTag bonds = extra().getList("bonds", Tag.TAG_COMPOUND);
 		boolean alphaCrown = ClientRaceState.talents.contains(Talents.PACK_ALPHA);
 		for (int i = 0; i < bonds.size() && y + 20 < bottomY; i++) {
-			NbtCompound b = bonds.getCompound(i);
+			CompoundTag b = bonds.getCompound(i);
 			BeastKind kind = BeastKind.byId(b.getString("kind")).orElse(null);
 			if (kind == null) {
 				continue;
@@ -387,87 +387,87 @@ public class BestiaryScreen extends Screen {
 			LegacyUi.portrait(ctx, "beast", kind.id(), kind.icon(), x + 2, y + 2, true);
 			if (leader) {
 				// A small crown over the leader's icon
-				ctx.getMatrices().push();
-				ctx.getMatrices().translate(0, 0, 250);
-				ctx.drawText(textRenderer, "♛", x + 1, y - 2, LegacyUi.GOLD, true);
-				ctx.getMatrices().pop();
+				ctx.pose().pushPose();
+				ctx.pose().translate(0, 0, 250);
+				ctx.drawString(font, "♛", x + 1, y - 2, LegacyUi.GOLD, true);
+				ctx.pose().popPose();
 			}
-			String name = b.getString("name").isEmpty() ? Text.translatable("mages_legacy.beast." + kind.id()).getString() : b.getString("name");
-			Text level = Text.translatable("mages_legacy.screen.level", b.getInt("level"));
+			String name = b.getString("name").isEmpty() ? Component.translatable("mages_legacy.beast." + kind.id()).getString() : b.getString("name");
+			Component level = Component.translatable("mages_legacy.screen.level", b.getInt("level"));
 			if (renaming != i) {
-				ctx.drawTextWithShadow(textRenderer, textRenderer.trimToWidth(name, w - 26 - textRenderer.getWidth(level)), x + 21, y + 2, LegacyUi.TEXT);
+				ctx.drawString(font, font.plainSubstrByWidth(name, w - 26 - font.width(level)), x + 21, y + 2, LegacyUi.TEXT);
 			} else {
 				ctx.fill(x + 19, y + 1, x + w - 36, y + 12, LegacyUi.BLACK);
 			}
-			ctx.drawTextWithShadow(textRenderer, level, x + w - 3 - textRenderer.getWidth(level), y + 2, LegacyUi.GOLD);
+			ctx.drawString(font, level, x + w - 3 - font.width(level), y + 2, LegacyUi.GOLD);
 			int rest = b.getInt("restSeconds");
 			boolean staying = b.getBoolean("staying");
-			Text line = rest > 0 ? Text.translatable("mages_legacy.bestiary.resting", (rest + 59) / 60).formatted(Formatting.YELLOW)
-					: staying ? Text.translatable("mages_legacy.bestiary.staying").formatted(Formatting.AQUA)
-					: Text.translatable("mages_legacy.beast." + kind.id() + ".skill").formatted(Formatting.GRAY);
+			Component line = rest > 0 ? Component.translatable("mages_legacy.bestiary.resting", (rest + 59) / 60).withStyle(ChatFormatting.YELLOW)
+					: staying ? Component.translatable("mages_legacy.bestiary.staying").withStyle(ChatFormatting.AQUA)
+					: Component.translatable("mages_legacy.beast." + kind.id() + ".skill").withStyle(ChatFormatting.GRAY);
 			// Care marks on the right of the second line: a steaming bowl while fed, a heart while it wants petting
 			int fed = b.getInt("fedSeconds");
 			String fedMark = fed > 0 ? "♨" : "";
 			String petMark = b.getBoolean("petReady") && rest == 0 ? "❤" : "";
 			String marks = fedMark + petMark;
-			int marksW = marks.isEmpty() ? 0 : textRenderer.getWidth(marks) + 3;
-			ctx.drawTextWithShadow(textRenderer, Language.getInstance().reorder(textRenderer.trimToWidth(line, w - 24 - marksW)), x + 21, y + 11, 0xFFFFFFFF);
-			int mx = x + w - 3 - textRenderer.getWidth(marks);
-			ctx.drawTextWithShadow(textRenderer, fedMark, mx, y + 11, LegacyUi.GREEN);
-			ctx.drawTextWithShadow(textRenderer, petMark, mx + textRenderer.getWidth(fedMark), y + 11, 0xFFFF7EB6);
+			int marksW = marks.isEmpty() ? 0 : font.width(marks) + 3;
+			ctx.drawString(font, Language.getInstance().getVisualOrder(font.substrByWidth(line, w - 24 - marksW)), x + 21, y + 11, 0xFFFFFFFF);
+			int mx = x + w - 3 - font.width(marks);
+			ctx.drawString(font, fedMark, mx, y + 11, LegacyUi.GREEN);
+			ctx.drawString(font, petMark, mx + font.width(fedMark), y + 11, 0xFFFF7EB6);
 			if (hot) {
 				tooltip = new ArrayList<>();
-				tooltip.add(Text.literal(name).formatted(Formatting.GOLD, Formatting.BOLD));
-				tooltip.add(Text.translatable("mages_legacy.beast." + kind.id() + ".skill").formatted(Formatting.YELLOW));
-				TalentScreen.wrapInto(tooltip, Text.translatable("mages_legacy.beast." + kind.id() + ".skill_desc").formatted(Formatting.GRAY));
-				tooltip.add(Text.translatable("mages_legacy.bestiary.beast_level", b.getInt("level"), b.getInt("xp"), Bonds.xpForNext(b.getInt("level")))
-						.formatted(Formatting.GREEN));
+				tooltip.add(Component.literal(name).withStyle(ChatFormatting.GOLD, ChatFormatting.BOLD));
+				tooltip.add(Component.translatable("mages_legacy.beast." + kind.id() + ".skill").withStyle(ChatFormatting.YELLOW));
+				TalentScreen.wrapInto(tooltip, Component.translatable("mages_legacy.beast." + kind.id() + ".skill_desc").withStyle(ChatFormatting.GRAY));
+				tooltip.add(Component.translatable("mages_legacy.bestiary.beast_level", b.getInt("level"), b.getInt("xp"), Bonds.xpForNext(b.getInt("level")))
+						.withStyle(ChatFormatting.GREEN));
 				int power = b.getInt("level") / 5 + (ClientRaceState.talents.contains(Talents.PACK_SKILL) ? 1 : 0) + (leader && alphaCrown ? 2 : 0);
-				tooltip.add(Text.translatable("mages_legacy.bestiary.power", power).formatted(Formatting.AQUA));
+				tooltip.add(Component.translatable("mages_legacy.bestiary.power", power).withStyle(ChatFormatting.AQUA));
 				if (leader) {
-					tooltip.add(Text.translatable(alphaCrown ? "mages_legacy.bestiary.leader" : "mages_legacy.bestiary.leader_no_crown")
-							.formatted(Formatting.GOLD));
+					tooltip.add(Component.translatable(alphaCrown ? "mages_legacy.bestiary.leader" : "mages_legacy.bestiary.leader_no_crown")
+							.withStyle(ChatFormatting.GOLD));
 				}
 				// Care: fed or hungry (and what it eats), whether it would like petting, whether it waits somewhere
-				tooltip.add(fed > 0 ? Text.translatable("mages_legacy.bestiary.fed", (fed + 59) / 60).formatted(Formatting.GREEN)
-						: Text.translatable("mages_legacy.bestiary.hungry", Text.translatable("mages_legacy.beast." + kind.id() + ".treat"))
-								.formatted(Formatting.YELLOW));
+				tooltip.add(fed > 0 ? Component.translatable("mages_legacy.bestiary.fed", (fed + 59) / 60).withStyle(ChatFormatting.GREEN)
+						: Component.translatable("mages_legacy.bestiary.hungry", Component.translatable("mages_legacy.beast." + kind.id() + ".treat"))
+								.withStyle(ChatFormatting.YELLOW));
 				if (b.getBoolean("petReady") && rest == 0) {
-					tooltip.add(Text.translatable("mages_legacy.bestiary.wants_pet").formatted(Formatting.LIGHT_PURPLE));
+					tooltip.add(Component.translatable("mages_legacy.bestiary.wants_pet").withStyle(ChatFormatting.LIGHT_PURPLE));
 				}
 				if (staying) {
-					tooltip.add(Text.translatable("mages_legacy.bestiary.staying").formatted(Formatting.AQUA));
+					tooltip.add(Component.translatable("mages_legacy.bestiary.staying").withStyle(ChatFormatting.AQUA));
 				}
-				tooltip.add(Text.translatable("mages_legacy.bestiary.beast_hint").formatted(Formatting.DARK_GRAY));
+				tooltip.add(Component.translatable("mages_legacy.bestiary.beast_hint").withStyle(ChatFormatting.DARK_GRAY));
 			}
 			y += 23;
 		}
 		if (bonds.isEmpty()) {
-			ctx.drawTextWithShadow(textRenderer, Text.translatable("mages_legacy.bestiary.no_beasts").formatted(Formatting.ITALIC), x, y, LegacyUi.MUTED);
+			ctx.drawString(font, Component.translatable("mages_legacy.bestiary.no_beasts").withStyle(ChatFormatting.ITALIC), x, y, LegacyUi.MUTED);
 			y += 12;
 		}
 
 		// Beasts listening to a Song right now, with how far their ritual has come
-		NbtList rituals = extra().getList("rituals", NbtElement.COMPOUND_TYPE);
+		ListTag rituals = extra().getList("rituals", Tag.TAG_COMPOUND);
 		if (!rituals.isEmpty() && y + 26 < bottomY) {
 			y += 4;
-			ctx.drawTextWithShadow(textRenderer, Text.translatable("mages_legacy.bestiary.listening").formatted(Formatting.BOLD), x, y, LegacyUi.GOLD);
+			ctx.drawString(font, Component.translatable("mages_legacy.bestiary.listening").withStyle(ChatFormatting.BOLD), x, y, LegacyUi.GOLD);
 			y += 11;
 			for (int i = 0; i < rituals.size() && y + 18 < bottomY; i++) {
-				NbtCompound r = rituals.getCompound(i);
+				CompoundTag r = rituals.getCompound(i);
 				BeastKind kind = BeastKind.byId(r.getString("kind")).orElse(null);
 				if (kind == null) {
 					continue;
 				}
 				boolean hot = mouseX >= x && mouseX < x + w && mouseY >= y && mouseY < y + 18;
 				LegacyUi.portrait(ctx, "beast", kind.id(), kind.icon(), x, y, true);
-				Text name = Text.translatable("mages_legacy.beast." + kind.id());
+				Component name = Component.translatable("mages_legacy.beast." + kind.id());
 				String progress = r.getInt("progress") + "/" + Bonds.needed(kind);
-				ctx.drawTextWithShadow(textRenderer, name, x + 19, y + 4, LegacyUi.TEXT);
-				int bx = x + 19 + textRenderer.getWidth(name) + 6;
-				ctx.drawTextWithShadow(textRenderer, progress, bx, y + 4, LegacyUi.GREEN);
-				Text left = Text.translatable("mages_legacy.bestiary.listen_left", r.getInt("minutes"));
-				ctx.drawTextWithShadow(textRenderer, left, x + w - textRenderer.getWidth(left), y + 4, LegacyUi.MUTED);
+				ctx.drawString(font, name, x + 19, y + 4, LegacyUi.TEXT);
+				int bx = x + 19 + font.width(name) + 6;
+				ctx.drawString(font, progress, bx, y + 4, LegacyUi.GREEN);
+				Component left = Component.translatable("mages_legacy.bestiary.listen_left", r.getInt("minutes"));
+				ctx.drawString(font, left, x + w - font.width(left), y + 4, LegacyUi.MUTED);
 				if (hot) {
 					tooltip = beastKindTooltip(kind);
 				}
@@ -478,7 +478,7 @@ public class BestiaryScreen extends Screen {
 		y = Math.max(y + 4, bottomY);
 		LegacyUi.divider(ctx, x, x + w, y, color);
 		y += 8;
-		ctx.drawTextWithShadow(textRenderer, Text.translatable("mages_legacy.bestiary.tameable").formatted(Formatting.BOLD), x, y + 2, color);
+		ctx.drawString(font, Component.translatable("mages_legacy.bestiary.tameable").withStyle(ChatFormatting.BOLD), x, y + 2, color);
 		y += 13;
 		for (int i = 0; i < BeastKind.ALL.size(); i++) {
 			BeastKind kind = BeastKind.ALL.get(i);
@@ -495,43 +495,43 @@ public class BestiaryScreen extends Screen {
 		return tooltip;
 	}
 
-	private List<Text> beastKindTooltip(BeastKind kind) {
-		List<Text> lines = new ArrayList<>();
+	private List<Component> beastKindTooltip(BeastKind kind) {
+		List<Component> lines = new ArrayList<>();
 		String id = "mages_legacy.beast." + kind.id();
-		lines.add(Text.translatable(id).formatted(Formatting.GOLD, Formatting.BOLD));
-		lines.add(Text.translatable(id + ".skill").formatted(Formatting.YELLOW));
-		TalentScreen.wrapInto(lines, Text.translatable(id + ".skill_desc").formatted(Formatting.GRAY));
+		lines.add(Component.translatable(id).withStyle(ChatFormatting.GOLD, ChatFormatting.BOLD));
+		lines.add(Component.translatable(id + ".skill").withStyle(ChatFormatting.YELLOW));
+		TalentScreen.wrapInto(lines, Component.translatable(id + ".skill_desc").withStyle(ChatFormatting.GRAY));
 		int needed = Bonds.needed(kind);
-		TalentScreen.wrapInto(lines, Text.translatable("mages_legacy.bestiary.taming", Text.translatable(id + ".taming", needed).getString())
-				.formatted(Formatting.WHITE));
-		lines.add(Text.translatable("mages_legacy.bestiary.beast_cost", Shepherd.beastCost(kind, ClientRaceState.talents.contains(Talents.PACK_LIGHT)))
-				.formatted(Formatting.AQUA));
-		lines.add(Text.translatable("mages_legacy.bestiary.treat", Text.translatable(id + ".treat")).formatted(Formatting.GRAY));
+		TalentScreen.wrapInto(lines, Component.translatable("mages_legacy.bestiary.taming", Component.translatable(id + ".taming", needed).getString())
+				.withStyle(ChatFormatting.WHITE));
+		lines.add(Component.translatable("mages_legacy.bestiary.beast_cost", Shepherd.beastCost(kind, ClientRaceState.talents.contains(Talents.PACK_LIGHT)))
+				.withStyle(ChatFormatting.AQUA));
+		lines.add(Component.translatable("mages_legacy.bestiary.treat", Component.translatable(id + ".treat")).withStyle(ChatFormatting.GRAY));
 		return lines;
 	}
 
-	private List<Text> echoTooltip(EchoType type, int inSquad) {
-		List<Text> lines = new ArrayList<>();
-		lines.add(Text.translatable("mages_legacy.echo.name", type.type().getName()).formatted(Formatting.AQUA, Formatting.BOLD));
-		TalentScreen.wrapInto(lines, Text.translatable("mages_legacy.echo.trait." + type.path())
-				.formatted(Formatting.YELLOW));
+	private List<Component> echoTooltip(EchoType type, int inSquad) {
+		List<Component> lines = new ArrayList<>();
+		lines.add(Component.translatable("mages_legacy.echo.name", type.type().getDescription()).withStyle(ChatFormatting.AQUA, ChatFormatting.BOLD));
+		TalentScreen.wrapInto(lines, Component.translatable("mages_legacy.echo.trait." + type.path())
+				.withStyle(ChatFormatting.YELLOW));
 		if (type.group() > 1) {
-			lines.add(Text.translatable("mages_legacy.bestiary.group", type.group()).formatted(Formatting.GRAY));
+			lines.add(Component.translatable("mages_legacy.bestiary.group", type.group()).withStyle(ChatFormatting.GRAY));
 		}
 		int kills = extra().getCompound("kills").getInt(type.id());
 		int need = type.killsNeeded();
 		if (kills >= need) {
-			lines.add(Text.translatable("mages_legacy.bestiary.cost", type.voiceCost(quiet()), type.capacity()).formatted(Formatting.GRAY));
-			lines.add(Text.translatable("mages_legacy.bestiary.in_squad", inSquad).formatted(Formatting.AQUA));
-			lines.add(Text.translatable("mages_legacy.bestiary.pick").formatted(Formatting.GREEN));
+			lines.add(Component.translatable("mages_legacy.bestiary.cost", type.voiceCost(quiet()), type.capacity()).withStyle(ChatFormatting.GRAY));
+			lines.add(Component.translatable("mages_legacy.bestiary.in_squad", inSquad).withStyle(ChatFormatting.AQUA));
+			lines.add(Component.translatable("mages_legacy.bestiary.pick").withStyle(ChatFormatting.GREEN));
 		} else {
-			lines.add(Text.translatable("mages_legacy.bestiary.need", need - kills).formatted(Formatting.GRAY));
+			lines.add(Component.translatable("mages_legacy.bestiary.need", need - kills).withStyle(ChatFormatting.GRAY));
 		}
 		return lines;
 	}
 
 	@Override
-	public boolean shouldPause() {
+	public boolean isPauseScreen() {
 		return false;
 	}
 }

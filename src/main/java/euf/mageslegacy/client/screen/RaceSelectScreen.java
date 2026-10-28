@@ -6,12 +6,12 @@ import euf.mageslegacy.race.AbilitySlots;
 import euf.mageslegacy.race.Race;
 import java.util.ArrayList;
 import java.util.List;
-import net.minecraft.client.gui.DrawContext;
-import net.minecraft.client.gui.screen.Screen;
-import net.minecraft.client.resource.language.I18n;
-import net.minecraft.text.OrderedText;
-import net.minecraft.text.Text;
-import net.minecraft.util.Formatting;
+import net.minecraft.ChatFormatting;
+import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.resources.language.I18n;
+import net.minecraft.network.chat.Component;
+import net.minecraft.util.FormattedCharSequence;
 
 /**
  * A card for every race with its emblem on top (the sleeping ones too, with their legend); below, the chosen race: emblem, name and legend on the left, strengths,
@@ -33,14 +33,14 @@ public class RaceSelectScreen extends Screen {
 	private int traitsMax;
 
 	public RaceSelectScreen() {
-		super(Text.translatable("mages_legacy.screen.choose_title"));
+		super(Component.translatable("mages_legacy.screen.choose_title"));
 	}
 
 	@Override
 	protected void init() {
-		chooseButton = addDrawableChild(new LegacyButton(width / 2 + 4, height - 26, 150, 20, Text.empty(), b -> choose()).primary());
-		addDrawableChild(new LegacyButton(width / 2 - 154, height - 26, 150, 20, Text.translatable("mages_legacy.screen.back_to_legend"),
-				b -> client.setScreen(new LoreScreen())));
+		chooseButton = addRenderableWidget(new LegacyButton(width / 2 + 4, height - 26, 150, 20, Component.empty(), b -> choose()).primary());
+		addRenderableWidget(new LegacyButton(width / 2 - 154, height - 26, 150, 20, Component.translatable("mages_legacy.screen.back_to_legend"),
+				b -> minecraft.setScreen(new LoreScreen())));
 		updateButton();
 	}
 
@@ -48,8 +48,8 @@ public class RaceSelectScreen extends Screen {
 		chooseButton.active = selected.playable;
 		chooseButton.accent(LegacyUi.argb(selected.color));
 		chooseButton.setMessage(selected.playable
-				? Text.translatable("mages_legacy.screen.choose", Text.translatable(selected.key()))
-				: Text.translatable("mages_legacy.screen.soon"));
+				? Component.translatable("mages_legacy.screen.choose", Component.translatable(selected.key()))
+				: Component.translatable("mages_legacy.screen.soon"));
 	}
 
 	public void select(Race race) {
@@ -73,7 +73,7 @@ public class RaceSelectScreen extends Screen {
 	}
 
 	/** A thin scrollbar along the right edge of a scrolled area. */
-	private void scrollbar(DrawContext ctx, int x, int top, int bottom, int scroll, int max, int color) {
+	private void scrollbar(GuiGraphics ctx, int x, int top, int bottom, int scroll, int max, int color) {
 		if (max <= 0) {
 			return;
 		}
@@ -132,7 +132,7 @@ public class RaceSelectScreen extends Screen {
 	}
 
 	@Override
-	public void render(DrawContext ctx, int mouseX, int mouseY, float delta) {
+	public void render(GuiGraphics ctx, int mouseX, int mouseY, float delta) {
 		LegacyUi.background(ctx, width, height, null);
 		LegacyUi.heading(ctx, title, width / 2, 9, LegacyUi.GOLD);
 		for (Race race : Race.values()) {
@@ -144,11 +144,11 @@ public class RaceSelectScreen extends Screen {
 		int hoveredSlot = drawTraits(ctx, rightX, mouseX, mouseY);
 		super.render(ctx, mouseX, mouseY, delta);
 		if (hoveredSlot > 0) {
-			ctx.drawTooltip(textRenderer, abilityTooltip(selected, hoveredSlot), mouseX, mouseY);
+			ctx.renderComponentTooltip(font, abilityTooltip(selected, hoveredSlot), mouseX, mouseY);
 		}
 	}
 
-	private void drawCard(DrawContext ctx, Race race, int mouseX, int mouseY) {
+	private void drawCard(GuiGraphics ctx, Race race, int mouseX, int mouseY) {
 		int x = cardX(race.ordinal());
 		int w = cardWidth();
 		int color = LegacyUi.argb(race.color);
@@ -168,13 +168,13 @@ public class RaceSelectScreen extends Screen {
 		} else {
 			LegacyUi.diamond(ctx, cx, y + 20, 10, color);
 		}
-		Text name = Text.translatable(race.key());
+		Component name = Component.translatable(race.key());
 		int nameColor = race.playable ? (isSelected ? 0xFFFFFFFF : color) : (isSelected ? color : 0xFF7A7078);
-		ctx.drawCenteredTextWithShadow(textRenderer, textRenderer.trimToWidth(name.getString(), w - 4), cx, y + 39, nameColor);
+		ctx.drawCenteredString(font, font.plainSubstrByWidth(name.getString(), w - 4), cx, y + 39, nameColor);
 	}
 
 	/** Left column: the emblem with a glow, the race's name and tagline, then its legend. */
-	private void drawLegend(DrawContext ctx, int x) {
+	private void drawLegend(GuiGraphics ctx, int x) {
 		int w = colWidth();
 		int top = detailTop();
 		int bottom = detailBottom();
@@ -186,12 +186,12 @@ public class RaceSelectScreen extends Screen {
 		if (LegacyUi.exists(LegacyUi.emblem(selected))) {
 			LegacyUi.emblem(ctx, selected, x, top, emblem, true);
 		}
-		ctx.getMatrices().push();
-		ctx.getMatrices().translate(x + emblem + 8, top + 6, 0);
-		ctx.getMatrices().scale(1.5f, 1.5f, 1f);
-		ctx.drawTextWithShadow(textRenderer, Text.translatable(selected.key()), 0, 0, color);
-		ctx.getMatrices().pop();
-		ctx.drawTextWithShadow(textRenderer, Text.translatable(selected.key() + ".tagline").formatted(Formatting.ITALIC), x + emblem + 8, top + 24,
+		ctx.pose().pushPose();
+		ctx.pose().translate(x + emblem + 8, top + 6, 0);
+		ctx.pose().scale(1.5f, 1.5f, 1f);
+		ctx.drawString(font, Component.translatable(selected.key()), 0, 0, color);
+		ctx.pose().popPose();
+		ctx.drawString(font, Component.translatable(selected.key() + ".tagline").withStyle(ChatFormatting.ITALIC), x + emblem + 8, top + 24,
 				LegacyUi.MUTED);
 
 		int y = top + emblem + 6;
@@ -201,9 +201,9 @@ public class RaceSelectScreen extends Screen {
 		int areaBottom = bottom - 4;
 		ctx.enableScissor(x - 2, areaTop, x + w + 2, areaBottom);
 		y = areaTop - legendScroll;
-		for (Text line : Lines.of(selected.key() + ".lore")) {
-			for (OrderedText row : textRenderer.wrapLines(line.copy().formatted(Formatting.ITALIC), w - 4)) {
-				ctx.drawText(textRenderer, row, x, y, LegacyUi.PARCHMENT, true);
+		for (Component line : Lines.of(selected.key() + ".lore")) {
+			for (FormattedCharSequence row : font.split(line.copy().withStyle(ChatFormatting.ITALIC), w - 4)) {
+				ctx.drawString(font, row, x, y, LegacyUi.PARCHMENT, true);
 				y += 10;
 			}
 			y += 4;
@@ -215,7 +215,7 @@ public class RaceSelectScreen extends Screen {
 	}
 
 	/** Right column: strengths and weaknesses as gem lists, then the ability tiles. Returns the hovered ability slot. */
-	private int drawTraits(DrawContext ctx, int x, int mouseX, int mouseY) {
+	private int drawTraits(GuiGraphics ctx, int x, int mouseX, int mouseY) {
 		int w = colWidth();
 		int top = detailTop();
 		int bottom = detailBottom();
@@ -229,10 +229,10 @@ public class RaceSelectScreen extends Screen {
 		// Strengths and weaknesses scroll above the ability tiles
 		ctx.enableScissor(x - 2, top, x + w + 2, listBottom);
 		int y = top - traitsScroll;
-		y = section(ctx, Text.translatable("mages_legacy.screen.strengths"), x, y, LegacyUi.GREEN);
+		y = section(ctx, Component.translatable("mages_legacy.screen.strengths"), x, y, LegacyUi.GREEN);
 		y = gems(ctx, Lines.of(selected.key() + ".perk"), x, y, w - 4, LegacyUi.GREEN, 0xFFD6EBD0, Integer.MAX_VALUE);
 		y += 4;
-		y = section(ctx, Text.translatable("mages_legacy.screen.weaknesses"), x, y, LegacyUi.RED);
+		y = section(ctx, Component.translatable("mages_legacy.screen.weaknesses"), x, y, LegacyUi.RED);
 		y = gems(ctx, Lines.of(selected.key() + ".weak"), x, y, w - 4, LegacyUi.RED, 0xFFEBD0D0, Integer.MAX_VALUE);
 		ctx.disableScissor();
 		traitsMax = Math.max(0, y + traitsScroll - listBottom);
@@ -241,10 +241,10 @@ public class RaceSelectScreen extends Screen {
 
 		if (!abilities) {
 			// A race not awakened yet: a sleeping seal instead of abilities
-			Text soon = Text.translatable("mages_legacy.screen.soon").formatted(Formatting.ITALIC);
+			Component soon = Component.translatable("mages_legacy.screen.soon").withStyle(ChatFormatting.ITALIC);
 			int cy = bottom - 16;
 			LegacyUi.divider(ctx, x, x + w, cy - 6, LegacyUi.argb(selected.color));
-			ctx.drawCenteredTextWithShadow(textRenderer, soon, x + w / 2, cy, LegacyUi.MUTED);
+			ctx.drawCenteredString(font, soon, x + w / 2, cy, LegacyUi.MUTED);
 			return 0;
 		}
 		int tilesTop = bottom - tilesH - 6;
@@ -270,8 +270,8 @@ public class RaceSelectScreen extends Screen {
 			if (icon != null && LegacyUi.exists(LegacyUi.icon(icon))) {
 				LegacyUi.icon(ctx, LegacyUi.icon(icon), cx - 8, ty + 4, 16, true);
 			}
-			Text name = Text.translatable(key + ".name");
-			ctx.drawCenteredTextWithShadow(textRenderer, textRenderer.trimToWidth(name.getString(), tileW - 4), cx, ty + 23, LegacyUi.GOLD);
+			Component name = Component.translatable(key + ".name");
+			ctx.drawCenteredString(font, font.plainSubstrByWidth(name.getString(), tileW - 4), cx, ty + 23, LegacyUi.GOLD);
 		}
 		return hovered;
 	}
@@ -279,29 +279,29 @@ public class RaceSelectScreen extends Screen {
 	/** How many abilities a race has: the main three plus whatever it has on H and Alt; 0 for a race not awakened yet. */
 	private static int abilityCount(Race race) {
 		int count = 0;
-		while (count < AbilitySlots.KEYS && I18n.hasTranslation("mages_legacy.ability." + race.id() + "." + (count + 1) + ".name")) {
+		while (count < AbilitySlots.KEYS && I18n.exists("mages_legacy.ability." + race.id() + "." + (count + 1) + ".name")) {
 			count++;
 		}
 		return count;
 	}
 
-	private int section(DrawContext ctx, Text title, int x, int y, int color) {
-		ctx.drawTextWithShadow(textRenderer, title.copy().formatted(Formatting.BOLD), x, y, color);
+	private int section(GuiGraphics ctx, Component title, int x, int y, int color) {
+		ctx.drawString(font, title.copy().withStyle(ChatFormatting.BOLD), x, y, color);
 		return y + 12;
 	}
 
-	private int gems(DrawContext ctx, List<Text> lines, int x, int y, int w, int gem, int color, int bottom) {
-		for (Text line : lines) {
-			List<OrderedText> rows = textRenderer.wrapLines(line, w - 10);
+	private int gems(GuiGraphics ctx, List<Component> lines, int x, int y, int w, int gem, int color, int bottom) {
+		for (Component line : lines) {
+			List<FormattedCharSequence> rows = font.split(line, w - 10);
 			if (y + 9 > bottom) {
 				return y;
 			}
 			LegacyUi.diamond(ctx, x + 3, y + 3, 2, gem);
-			for (OrderedText row : rows) {
+			for (FormattedCharSequence row : rows) {
 				if (y + 9 > bottom) {
 					return y;
 				}
-				ctx.drawText(textRenderer, row, x + 10, y, color, true);
+				ctx.drawString(font, row, x + 10, y, color, true);
 				y += 10;
 			}
 			y += 1;
@@ -309,14 +309,14 @@ public class RaceSelectScreen extends Screen {
 		return y;
 	}
 
-	private static List<Text> abilityTooltip(Race race, int slot) {
+	private static List<Component> abilityTooltip(Race race, int slot) {
 		String key = "mages_legacy.ability." + race.id() + "." + slot;
-		List<Text> lines = new ArrayList<>();
-		lines.add(Text.translatable(key + ".name").formatted(Formatting.GOLD, Formatting.BOLD));
-		if (I18n.hasTranslation(key + ".lore")) {
-			TalentScreen.wrapInto(lines, Text.translatable(key + ".lore").formatted(Formatting.GRAY, Formatting.ITALIC));
+		List<Component> lines = new ArrayList<>();
+		lines.add(Component.translatable(key + ".name").withStyle(ChatFormatting.GOLD, ChatFormatting.BOLD));
+		if (I18n.exists(key + ".lore")) {
+			TalentScreen.wrapInto(lines, Component.translatable(key + ".lore").withStyle(ChatFormatting.GRAY, ChatFormatting.ITALIC));
 		}
-		TalentScreen.wrapInto(lines, Text.translatable(key + ".desc").formatted(Formatting.WHITE));
+		TalentScreen.wrapInto(lines, Component.translatable(key + ".desc").withStyle(ChatFormatting.WHITE));
 		return lines;
 	}
 
@@ -326,7 +326,7 @@ public class RaceSelectScreen extends Screen {
 	}
 
 	@Override
-	public boolean shouldPause() {
+	public boolean isPauseScreen() {
 		return false;
 	}
 }

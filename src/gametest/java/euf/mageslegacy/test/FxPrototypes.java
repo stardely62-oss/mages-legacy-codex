@@ -19,13 +19,13 @@ import java.awt.Color;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Function;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.entity.Entity;
-import net.minecraft.registry.Registries;
-import net.minecraft.util.Identifier;
-import net.minecraft.util.math.Vec2f;
-import net.minecraft.util.math.Vec3d;
-import net.minecraft.world.World;
+import net.minecraft.client.Minecraft;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.phys.Vec2;
+import net.minecraft.world.phys.Vec3;
 import org.joml.Vector3f;
 import team.lodestar.lodestone.systems.easing.Easing;
 import team.lodestar.lodestone.systems.particle.builder.WorldParticleBuilder;
@@ -40,9 +40,9 @@ import team.lodestar.lodestone.systems.particle.world.type.LodestoneWorldParticl
  * photograph next to our own renderer. Only the harness uses this; the mod itself doesn't depend on either.
  */
 final class FxPrototypes {
-	private static final Identifier HEART = new Identifier("mages_legacy", "textures/fx/heart.png");
-	private static final Identifier GLOW = new Identifier("mages_legacy", "textures/fx/glow.png");
-	private static final Identifier SPARK = new Identifier("mages_legacy", "textures/fx/spark.png");
+	private static final ResourceLocation HEART = new ResourceLocation("mages_legacy", "textures/fx/heart.png");
+	private static final ResourceLocation GLOW = new ResourceLocation("mages_legacy", "textures/fx/glow.png");
+	private static final ResourceLocation SPARK = new ResourceLocation("mages_legacy", "textures/fx/spark.png");
 	private static final int ROSE = 0xFFFF6FA8;
 	private static final int PALE = 0xFFFFD6E6;
 
@@ -61,14 +61,14 @@ final class FxPrototypes {
 		try {
 			java.lang.reflect.Field alpha = GradientColor.class.getDeclaredField("aP");
 			alpha.setAccessible(true);
-			alpha.set(color, new ArrayList<>(List.of(new Vec2f(0, 0), new Vec2f(0.08f, 1), new Vec2f(holdUntil, 1), new Vec2f(1, 0))));
+			alpha.set(color, new ArrayList<>(List.of(new Vec2(0, 0), new Vec2(0.08f, 1), new Vec2(holdUntil, 1), new Vec2(1, 0))));
 		} catch (ReflectiveOperationException e) {
 			throw new IllegalStateException(e);
 		}
 		return gradient;
 	}
 
-	private static ParticleEmitter emitter(Identifier texture, int argb, float size, float lifetime, float speed, IShape shape, int burst, float rate,
+	private static ParticleEmitter emitter(ResourceLocation texture, int argb, float size, float lifetime, float speed, IShape shape, int burst, float rate,
 			int duration) {
 		ParticleEmitter emitter = new ParticleEmitter();
 		ParticleConfig c = emitter.config;
@@ -109,19 +109,19 @@ final class FxPrototypes {
 
 	/** An effect at a point that may move every frame (a stream along a path). */
 	private static final class MovingEffect extends FXEffect {
-		private final Function<Float, Vec3d> path;
+		private final Function<Float, Vec3> path;
 		private final long start;
 
-		MovingEffect(FX fx, World world, Function<Float, Vec3d> path) {
+		MovingEffect(FX fx, Level world, Function<Float, Vec3> path) {
 			super(fx, world);
 			this.path = path;
-			this.start = world.getTime();
+			this.start = world.getGameTime();
 		}
 
 		@Override
 		public void start() {
 			runtime = fx.createRuntime();
-			Vec3d p = path.apply(0f);
+			Vec3 p = path.apply(0f);
 			runtime.getRoot().updatePos(new Vector3f((float) p.x, (float) p.y, (float) p.z));
 			runtime.emmit(this);
 		}
@@ -129,7 +129,7 @@ final class FxPrototypes {
 		@Override
 		public void updateFXObjectFrame(IFXObject fxObject, float partialTicks) {
 			if (runtime != null && fxObject == runtime.root) {
-				Vec3d p = path.apply(level.getTime() - start + partialTicks);
+				Vec3 p = path.apply(level.getGameTime() - start + partialTicks);
 				runtime.root.updatePos(new Vector3f((float) p.x, (float) p.y, (float) p.z));
 			}
 		}
@@ -137,8 +137,8 @@ final class FxPrototypes {
 
 	/** The Kiss with Photon: a heart bursts over the kissed in glowing hearts and sparks, and a comet of light flies to her. */
 	static void photonKiss(Entity kissed, Entity kisser) {
-		World world = kissed.getWorld();
-		Vec3d top = kissed.getPos().add(0, kissed.getHeight() + 0.4, 0);
+		Level world = kissed.level();
+		Vec3 top = kissed.position().add(0, kissed.getBbHeight() + 0.4, 0);
 		ParticleEmitter hearts = emitter(HEART, ROSE, 0.35f, 28, 0.9f, sphere(0.35f), 18, 0, 10);
 		hearts.config.forceOverLifetime.setEnable(true);
 		hearts.config.forceOverLifetime.setForce(new NumberFunction3(0, 0.6, 0));
@@ -149,12 +149,12 @@ final class FxPrototypes {
 		// The life drawn out: a glowing head trailing hearts and motes, arcing from the kissed to her chest
 		ParticleEmitter trail = emitter(GLOW, ROSE, 0.6f, 12, 0, sphere(0.05f), 0, 1.5f, 18);
 		ParticleEmitter crumbs = emitter(HEART, PALE, 0.16f, 18, 0.2f, sphere(0.15f), 0, 0.8f, 18);
-		Vec3d from = kissed.getPos().add(0, kissed.getHeight() * 0.7, 0);
+		Vec3 from = kissed.position().add(0, kissed.getBbHeight() * 0.7, 0);
 		MovingEffect stream = new MovingEffect(fx(trail, crumbs), world, t -> {
-			Vec3d to = kisser.getPos().add(0, kisser.getHeight() * 0.6, 0);
+			Vec3 to = kisser.position().add(0, kisser.getBbHeight() * 0.6, 0);
 			double u = Math.min(1, t / 16.0);
-			Vec3d apex = from.lerp(to, 0.5).add(0, 1.2, 0);
-			return from.multiply((1 - u) * (1 - u)).add(apex.multiply(2 * (1 - u) * u)).add(to.multiply(u * u));
+			Vec3 apex = from.lerp(to, 0.5).add(0, 1.2, 0);
+			return from.scale((1 - u) * (1 - u)).add(apex.scale(2 * (1 - u) * u)).add(to.scale(u * u));
 		});
 		stream.start();
 	}
@@ -167,8 +167,8 @@ final class FxPrototypes {
 		ring.config.setSimulationSpace(ParticleConfig.Space.Local);
 		ParticleEmitter halo = emitter(GLOW, ROSE, 1.2f, 20, 0, sphere(0.01f), 0, 0.25f, 100);
 		halo.config.setSimulationSpace(ParticleConfig.Space.Local);
-		EntityEffect effect = new EntityEffect(fx(ring, halo), thrall.getWorld(), thrall, EntityEffect.AutoRotate.NONE);
-		effect.setOffset(0, thrall.getHeight() + 0.5, 0);
+		EntityEffect effect = new EntityEffect(fx(ring, halo), thrall.level(), thrall, EntityEffect.AutoRotate.NONE);
+		effect.setOffset(0, thrall.getBbHeight() + 0.5, 0);
 		effect.start();
 		RUNNING.add(effect);
 	}
@@ -204,7 +204,7 @@ final class FxPrototypes {
 	}
 
 	private static LodestoneWorldParticleType type(String name) {
-		return (LodestoneWorldParticleType) Registries.PARTICLE_TYPE.get(new Identifier("lodestone", name));
+		return (LodestoneWorldParticleType) BuiltInRegistries.PARTICLE_TYPE.get(new ResourceLocation("lodestone", name));
 	}
 
 	private static final Color ROSE_C = new Color(255, 111, 168);
@@ -213,8 +213,8 @@ final class FxPrototypes {
 
 	/** The Kiss with Lodestone: a bloom of wisps and twinkles over the kissed, and a line of light to her. */
 	static void lodestoneKiss(Entity kissed, Entity kisser) {
-		World world = kissed.getWorld();
-		Vec3d top = kissed.getPos().add(0, kissed.getHeight() + 0.4, 0);
+		Level world = kissed.level();
+		Vec3 top = kissed.position().add(0, kissed.getBbHeight() + 0.4, 0);
 		builder(type("wisp"))
 				.setScaleData(GenericParticleData.create(0.45f, 0f).setEasing(Easing.QUARTIC_OUT).build())
 				.setTransparencyData(GenericParticleData.create(0.9f, 0f).setEasing(Easing.QUAD_IN).build())
@@ -233,12 +233,12 @@ final class FxPrototypes {
 				.setRandomMotion(0.15f, 0.15f)
 				.enableNoClip()
 				.repeat(world, top.x, top.y, top.z, 16);
-		Vec3d from = kissed.getPos().add(0, kissed.getHeight() * 0.7, 0);
-		Vec3d to = kisser.getPos().add(0, kisser.getHeight() * 0.6, 0);
+		Vec3 from = kissed.position().add(0, kissed.getBbHeight() * 0.7, 0);
+		Vec3 to = kisser.position().add(0, kisser.getBbHeight() * 0.6, 0);
 		for (int i = 0; i <= 16; i++) {
 			double u = i / 16.0;
-			Vec3d apex = from.lerp(to, 0.5).add(0, 1.2, 0);
-			Vec3d p = from.multiply((1 - u) * (1 - u)).add(apex.multiply(2 * (1 - u) * u)).add(to.multiply(u * u));
+			Vec3 apex = from.lerp(to, 0.5).add(0, 1.2, 0);
+			Vec3 p = from.scale((1 - u) * (1 - u)).add(apex.scale(2 * (1 - u) * u)).add(to.scale(u * u));
 			builder(type("wisp"))
 					.setScaleData(GenericParticleData.create(0.25f, 0.05f).build())
 					.setTransparencyData(GenericParticleData.create(0.8f, 0f).build())
@@ -252,8 +252,8 @@ final class FxPrototypes {
 
 	/** The Charm with Lodestone: a ring of star motes turning over the thrall. Spawned again each tick by the harness. */
 	static void lodestoneCharmTick(Entity thrall, long tick) {
-		World world = thrall.getWorld();
-		Vec3d c = thrall.getPos().add(0, thrall.getHeight() + 0.5, 0);
+		Level world = thrall.level();
+		Vec3 c = thrall.position().add(0, thrall.getBbHeight() + 0.5, 0);
 		for (int i = 0; i < 3; i++) {
 			double a = tick * 0.25 + i * Math.PI * 2 / 3;
 			builder(type("star"))
@@ -282,7 +282,7 @@ final class FxPrototypes {
 		return net.fabricmc.loader.api.FabricLoader.getInstance().isModLoaded("lodestone");
 	}
 
-	static World world() {
-		return MinecraftClient.getInstance().world;
+	static Level world() {
+		return Minecraft.getInstance().level;
 	}
 }

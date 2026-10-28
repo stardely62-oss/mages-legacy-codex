@@ -10,12 +10,12 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import net.minecraft.nbt.NbtCompound;
-import net.minecraft.nbt.NbtElement;
-import net.minecraft.nbt.NbtList;
-import net.minecraft.nbt.NbtString;
-import net.minecraft.server.network.ServerPlayerEntity;
-import net.minecraft.text.Text;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.ListTag;
+import net.minecraft.nbt.StringTag;
+import net.minecraft.nbt.Tag;
+import net.minecraft.network.chat.Component;
+import net.minecraft.server.level.ServerPlayer;
 
 /** One player's race, resource, experience and talents. Cooldowns and chains are not saved. */
 public class RaceData {
@@ -47,7 +47,7 @@ public class RaceData {
 	public boolean alt;
 	/**
 	 * Race experience taken from each capped source in the current window: source -> {window start (world time),
-	 * experience taken}. Saved, so leaving and coming back doesn't refill it. See {@link Progression#addXp(ServerPlayerEntity, RaceData, String, int, int)}.
+	 * experience taken}. Saved, so leaving and coming back doesn't refill it. See {@link Progression#addXp(ServerPlayer, RaceData, String, int, int)}.
 	 */
 	public final Map<String, long[]> xpTaken = new HashMap<>();
 	/** The legend and the choice of race were sent to the client this session. */
@@ -58,8 +58,8 @@ public class RaceData {
 	}
 
 	/** A key whose ability a talent opens, pressed before it: say which talent, rather than nothing at all. */
-	public static AbilityResult talentLocked(ServerPlayerEntity player, String talent) {
-		player.sendMessage(Text.translatable("mages_legacy.ability.talent_locked", Text.translatable("mages_legacy.talent." + talent)), true);
+	public static AbilityResult talentLocked(ServerPlayer player, String talent) {
+		player.displayClientMessage(Component.translatable("mages_legacy.ability.talent_locked", Component.translatable("mages_legacy.talent." + talent)), true);
 		return AbilityResult.HINTED;
 	}
 
@@ -126,21 +126,21 @@ public class RaceData {
 		dirty = true;
 	}
 
-	public NbtCompound toNbt() {
-		NbtCompound nbt = new NbtCompound();
+	public CompoundTag toNbt() {
+		CompoundTag nbt = new CompoundTag();
 		if (race != null) {
 			nbt.putString("race", race.id());
 		}
 		nbt.putFloat("resource", resource);
 		nbt.putInt("xp", xp);
 		nbt.putInt("level", level);
-		NbtList list = new NbtList();
-		talents.forEach(t -> list.add(NbtString.of(t)));
+		ListTag list = new ListTag();
+		talents.forEach(t -> list.add(StringTag.valueOf(t)));
 		nbt.put("talents", list);
-		NbtList tasteList = new NbtList();
-		tastes.forEach(t -> tasteList.add(NbtString.of(t)));
+		ListTag tasteList = new ListTag();
+		tastes.forEach(t -> tasteList.add(StringTag.valueOf(t)));
 		nbt.put("tastes", tasteList);
-		NbtCompound taken = new NbtCompound();
+		CompoundTag taken = new CompoundTag();
 		xpTaken.forEach((source, window) -> taken.putLongArray(source, window));
 		nbt.put("xp_taken", taken);
 		nbt.put("shepherd", shepherd.toNbt());
@@ -150,20 +150,20 @@ public class RaceData {
 		return nbt;
 	}
 
-	public static RaceData fromNbt(NbtCompound nbt) {
+	public static RaceData fromNbt(CompoundTag nbt) {
 		RaceData data = new RaceData();
 		data.race = Race.byId(nbt.getString("race")).orElse(null);
 		data.resource = nbt.getFloat("resource");
 		data.xp = nbt.getInt("xp");
 		data.level = nbt.getInt("level");
-		for (NbtElement e : nbt.getList("talents", NbtElement.STRING_TYPE)) {
-			data.talents.add(e.asString());
+		for (Tag e : nbt.getList("talents", Tag.TAG_STRING)) {
+			data.talents.add(e.getAsString());
 		}
-		for (NbtElement e : nbt.getList("tastes", NbtElement.STRING_TYPE)) {
-			data.tastes.add(e.asString());
+		for (Tag e : nbt.getList("tastes", Tag.TAG_STRING)) {
+			data.tastes.add(e.getAsString());
 		}
-		NbtCompound taken = nbt.getCompound("xp_taken");
-		for (String source : taken.getKeys()) {
+		CompoundTag taken = nbt.getCompound("xp_taken");
+		for (String source : taken.getAllKeys()) {
 			long[] window = taken.getLongArray(source);
 			if (window.length == 2) {
 				data.xpTaken.put(source, window);

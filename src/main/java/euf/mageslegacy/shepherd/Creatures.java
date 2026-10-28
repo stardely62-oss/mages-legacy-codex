@@ -11,21 +11,21 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.WeakHashMap;
-import net.minecraft.entity.Entity;
-import net.minecraft.entity.LivingEntity;
-import net.minecraft.entity.ai.goal.ActiveTargetGoal;
-import net.minecraft.entity.ai.goal.Goal;
-import net.minecraft.entity.mob.Angerable;
-import net.minecraft.entity.mob.CreeperEntity;
-import net.minecraft.entity.mob.MobEntity;
-import net.minecraft.entity.mob.Monster;
-import net.minecraft.entity.passive.AxolotlEntity;
-import net.minecraft.entity.passive.BeeEntity;
+import net.minecraft.core.BlockPos;
 import net.minecraft.server.MinecraftServer;
-import net.minecraft.server.network.ServerPlayerEntity;
-import net.minecraft.server.world.ServerWorld;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.Vec3d;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.Mob;
+import net.minecraft.world.entity.NeutralMob;
+import net.minecraft.world.entity.ai.goal.Goal;
+import net.minecraft.world.entity.ai.goal.target.NearestAttackableTargetGoal;
+import net.minecraft.world.entity.animal.Bee;
+import net.minecraft.world.entity.animal.axolotl.Axolotl;
+import net.minecraft.world.entity.monster.Creeper;
+import net.minecraft.world.entity.monster.Enemy;
+import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
 
 /**
@@ -42,7 +42,7 @@ public final class Creatures {
 	/** Creature uuid -> its Shepherd, for loaded bonded beasts (echoes live in {@link Echoes}). */
 	private static final Map<UUID, UUID> BEAST_OWNERS = new HashMap<>();
 	/** Mobs that already got their new goals (goals aren't saved, so a reloaded beast is taught again). */
-	private static final Set<MobEntity> TAUGHT = Collections.newSetFromMap(new WeakHashMap<>());
+	private static final Set<Mob> TAUGHT = Collections.newSetFromMap(new WeakHashMap<>());
 	/** Shepherd -> the monster they marked (Hunter's Mark) and until when. */
 	private static final Map<UUID, Mark> MARKS = new HashMap<>();
 
@@ -59,7 +59,7 @@ public final class Creatures {
 	@Nullable
 	public static UUID ownerOf(Entity entity) {
 		UUID echo = Echoes.ownerOf(entity);
-		return echo != null ? echo : BEAST_OWNERS.get(entity.getUuid());
+		return echo != null ? echo : BEAST_OWNERS.get(entity.getUUID());
 	}
 
 	public static boolean isCreatureOf(Entity entity, UUID owner) {
@@ -67,7 +67,7 @@ public final class Creatures {
 	}
 
 	public static void registerBeast(Entity entity, UUID owner) {
-		BEAST_OWNERS.put(entity.getUuid(), owner);
+		BEAST_OWNERS.put(entity.getUUID(), owner);
 	}
 
 	public static void forgetBeast(UUID entity) {
@@ -77,7 +77,7 @@ public final class Creatures {
 	/** Reads the owner from a loaded bonded beast's tags. */
 	@Nullable
 	public static UUID taggedOwner(Entity entity) {
-		for (String tag : entity.getCommandTags()) {
+		for (String tag : entity.getTags()) {
 			if (tag.startsWith(OWNER_TAG)) {
 				try {
 					return UUID.fromString(tag.substring(OWNER_TAG.length()));
@@ -90,63 +90,63 @@ public final class Creatures {
 	}
 
 	/** Every loaded creature of this Shepherd in its world within {@code radius}. */
-	public static List<LivingEntity> around(ServerPlayerEntity owner, double radius) {
+	public static List<LivingEntity> around(ServerPlayer owner, double radius) {
 		List<LivingEntity> list = new ArrayList<>();
-		for (LivingEntity e : owner.getServerWorld().getEntitiesByClass(LivingEntity.class, owner.getBoundingBox().expand(radius),
-				e -> e.isAlive() && isCreatureOf(e, owner.getUuid()))) {
+		for (LivingEntity e : owner.serverLevel().getEntitiesOfClass(LivingEntity.class, owner.getBoundingBox().inflate(radius),
+				e -> e.isAlive() && isCreatureOf(e, owner.getUUID()))) {
 			list.add(e);
 		}
 		return list;
 	}
 
-	public static void mark(ServerPlayerEntity owner, LivingEntity target, long until) {
-		MARKS.put(owner.getUuid(), new Mark(target.getUuid(), until));
+	public static void mark(ServerPlayer owner, LivingEntity target, long until) {
+		MARKS.put(owner.getUUID(), new Mark(target.getUUID(), until));
 	}
 
 	@Nullable
-	static LivingEntity marked(ServerPlayerEntity owner) {
-		Mark mark = MARKS.get(owner.getUuid());
-		if (mark == null || mark.until() < owner.getServer().getTicks()) {
+	static LivingEntity marked(ServerPlayer owner) {
+		Mark mark = MARKS.get(owner.getUUID());
+		if (mark == null || mark.until() < owner.getServer().getTickCount()) {
 			return null;
 		}
-		return owner.getServerWorld().getEntity(mark.target()) instanceof LivingEntity living && living.isAlive() ? living : null;
+		return owner.serverLevel().getEntity(mark.target()) instanceof LivingEntity living && living.isAlive() ? living : null;
 	}
 
 	@Nullable
-	static ServerPlayerEntity owner(MobEntity mob) {
+	static ServerPlayer owner(Mob mob) {
 		UUID id = ownerOf(mob);
 		MinecraftServer server = mob.getServer();
 		if (id == null || server == null) {
 			return null;
 		}
-		ServerPlayerEntity player = server.getPlayerManager().getPlayer(id);
-		return player != null && player.getWorld() == mob.getWorld() ? player : null;
+		ServerPlayer player = server.getPlayerList().getPlayer(id);
+		return player != null && player.level() == mob.level() ? player : null;
 	}
 
 	/**
 	 * Turns a mob into a Shepherd's creature: no more hunting players; instead it follows its Shepherd, defends it,
 	 * attacks what it marks and, if it can fight, the monsters near it. Bees and axolotls don't pick fights on land.
 	 */
-	public static void teach(MobEntity mob, boolean fights) {
+	public static void teach(Mob mob, boolean fights) {
 		if (!TAUGHT.add(mob)) {
 			return;
 		}
 		MobEntityAccessor ai = (MobEntityAccessor) mob;
 		if (fights) {
-			ai.mages_legacy$targets().getGoals().clear();
-			ai.mages_legacy$targets().add(1, new DefendOwnerGoal(mob));
+			ai.mages_legacy$targets().getAvailableGoals().clear();
+			ai.mages_legacy$targets().addGoal(1, new DefendOwnerGoal(mob));
 			// Not the neutral ones (a hit on one zombified piglin brings the whole horde down on the Shepherd) and not
 			// creepers (a melee echo would set one off next to its Shepherd); those only when they attack
-			ai.mages_legacy$targets().add(3, new ActiveTargetGoal<>(mob, MobEntity.class, 10, true, false, e ->
-					e instanceof Monster && !(e instanceof Angerable) && !(e instanceof CreeperEntity) && ownerOf(e) == null
+			ai.mages_legacy$targets().addGoal(3, new NearestAttackableTargetGoal<>(mob, Mob.class, 10, true, false, e ->
+					e instanceof Enemy && !(e instanceof NeutralMob) && !(e instanceof Creeper) && ownerOf(e) == null
 							&& nearOwner(mob, e, huntRadius(stance(mob)))));
 		}
-		ai.mages_legacy$goals().add(fights ? 6 : 2, new FollowOwnerGoal(mob));
+		ai.mages_legacy$goals().addGoal(fights ? 6 : 2, new FollowOwnerGoal(mob));
 	}
 
 	/** The Whistle's order this creature's Shepherd gave (guard while the Shepherd is away). */
-	static int stance(MobEntity mob) {
-		ServerPlayerEntity owner = owner(mob);
+	static int stance(Mob mob) {
+		ServerPlayer owner = owner(mob);
 		return owner == null ? ShepherdData.GUARD : RaceState.of(owner).shepherd.stance;
 	}
 
@@ -155,57 +155,57 @@ public final class Creatures {
 		return stance == ShepherdData.HUNT ? 24 : stance == ShepherdData.GUARD ? 8 : 0;
 	}
 
-	private static boolean nearOwner(MobEntity mob, LivingEntity target, double radius) {
-		ServerPlayerEntity owner = owner(mob);
-		return owner != null && owner.squaredDistanceTo(target) < radius * radius;
+	private static boolean nearOwner(Mob mob, LivingEntity target, double radius) {
+		ServerPlayer owner = owner(mob);
+		return owner != null && owner.distanceToSqr(target) < radius * radius;
 	}
 
 	/** A spot near the owner with room to stand, for creatures that fell too far behind. */
-	static Vec3d near(ServerPlayerEntity owner) {
-		ServerWorld world = owner.getServerWorld();
+	static Vec3 near(ServerPlayer owner) {
+		ServerLevel world = owner.serverLevel();
 		for (int i = 0; i < 10; i++) {
-			BlockPos pos = owner.getBlockPos().add(owner.getRandom().nextBetween(-2, 2), 0, owner.getRandom().nextBetween(-2, 2));
+			BlockPos pos = owner.blockPosition().offset(owner.getRandom().nextIntBetweenInclusive(-2, 2), 0, owner.getRandom().nextIntBetweenInclusive(-2, 2));
 			for (int dy = 1; dy >= -2; dy--) {
-				BlockPos feet = pos.up(dy);
+				BlockPos feet = pos.above(dy);
 				if (world.getBlockState(feet).getCollisionShape(world, feet).isEmpty()
-						&& world.getBlockState(feet.up()).getCollisionShape(world, feet.up()).isEmpty()
-						&& !world.getBlockState(feet.down()).getCollisionShape(world, feet.down()).isEmpty()) {
-					return Vec3d.ofBottomCenter(feet);
+						&& world.getBlockState(feet.above()).getCollisionShape(world, feet.above()).isEmpty()
+						&& !world.getBlockState(feet.below()).getCollisionShape(world, feet.below()).isEmpty()) {
+					return Vec3.atBottomCenterOf(feet);
 				}
 			}
 		}
-		return owner.getPos();
+		return owner.position();
 	}
 
 	/** Walks after the Shepherd; jumps to its side when left more than 24 blocks behind. */
 	static class FollowOwnerGoal extends Goal {
-		private final MobEntity mob;
-		private ServerPlayerEntity owner;
+		private final Mob mob;
+		private ServerPlayer owner;
 		private int recalc;
 
-		FollowOwnerGoal(MobEntity mob) {
+		FollowOwnerGoal(Mob mob) {
 			this.mob = mob;
-			setControls(EnumSet.of(Control.MOVE, Control.LOOK));
+			setFlags(EnumSet.of(Flag.MOVE, Flag.LOOK));
 		}
 
 		@Override
-		public boolean canStart() {
+		public boolean canUse() {
 			owner = owner(mob);
-			if (owner == null || owner.isSpectator() || mob.getTarget() != null || mob.getCommandTags().contains(STAY_TAG)) {
+			if (owner == null || owner.isSpectator() || mob.getTarget() != null || mob.getTags().contains(STAY_TAG)) {
 				return false;
 			}
 			// An axolotl dries out on land: it only follows a Shepherd who swims
-			if (mob instanceof AxolotlEntity && !owner.isTouchingWater()) {
+			if (mob instanceof Axolotl && !owner.isInWater()) {
 				return false;
 			}
 			// Guards keep close: they start after their Shepherd at 4 blocks, the others at 8
-			return mob.squaredDistanceTo(owner) > (stance(mob) == ShepherdData.GUARD ? 16 : 64);
+			return mob.distanceToSqr(owner) > (stance(mob) == ShepherdData.GUARD ? 16 : 64);
 		}
 
 		@Override
-		public boolean shouldContinue() {
-			return owner != null && owner.isAlive() && mob.getTarget() == null && mob.squaredDistanceTo(owner) > 9
-					&& !mob.getCommandTags().contains(STAY_TAG);
+		public boolean canContinueToUse() {
+			return owner != null && owner.isAlive() && mob.getTarget() == null && mob.distanceToSqr(owner) > 9
+					&& !mob.getTags().contains(STAY_TAG);
 		}
 
 		@Override
@@ -220,46 +220,46 @@ public final class Creatures {
 
 		@Override
 		public void tick() {
-			mob.getLookControl().lookAt(owner, 10, mob.getMaxLookPitchChange());
+			mob.getLookControl().setLookAt(owner, 10, mob.getMaxHeadXRot());
 			if (--recalc > 0) {
 				return;
 			}
 			recalc = 10;
-			if (mob.squaredDistanceTo(owner) > 24 * 24) {
-				Vec3d spot = near(owner);
-				mob.refreshPositionAndAngles(spot.x, spot.y, spot.z, mob.getYaw(), mob.getPitch());
+			if (mob.distanceToSqr(owner) > 24 * 24) {
+				Vec3 spot = near(owner);
+				mob.moveTo(spot.x, spot.y, spot.z, mob.getYRot(), mob.getXRot());
 				mob.getNavigation().stop();
 			} else {
-				mob.getNavigation().startMovingTo(owner, mob instanceof BeeEntity ? 1.0 : 1.2);
+				mob.getNavigation().moveTo(owner, mob instanceof Bee ? 1.0 : 1.2);
 			}
 		}
 	}
 
 	/** Attacks whoever hurts the Shepherd, then what the Shepherd attacks or marked. */
 	static class DefendOwnerGoal extends Goal {
-		private final MobEntity mob;
+		private final Mob mob;
 		private LivingEntity target;
 
-		DefendOwnerGoal(MobEntity mob) {
+		DefendOwnerGoal(Mob mob) {
 			this.mob = mob;
-			setControls(EnumSet.of(Control.TARGET));
+			setFlags(EnumSet.of(Flag.TARGET));
 		}
 
 		@Override
-		public boolean canStart() {
-			ServerPlayerEntity owner = owner(mob);
+		public boolean canUse() {
+			ServerPlayer owner = owner(mob);
 			if (owner == null) {
 				return false;
 			}
 			LivingEntity candidate = marked(owner);
 			if (candidate == null) {
-				candidate = owner.getAttacker();
+				candidate = owner.getLastHurtByMob();
 			}
-			if (candidate == null && owner.age - owner.getLastAttackTime() < 100) {
-				candidate = owner.getAttacking();
+			if (candidate == null && owner.tickCount - owner.getLastHurtMobTimestamp() < 100) {
+				candidate = owner.getLastHurtMob();
 			}
 			if (candidate == null || candidate == owner || candidate == mob || !candidate.isAlive()
-					|| isCreatureOf(candidate, owner.getUuid()) || candidate == mob.getTarget()) {
+					|| isCreatureOf(candidate, owner.getUUID()) || candidate == mob.getTarget()) {
 				return false;
 			}
 			target = candidate;
@@ -272,7 +272,7 @@ public final class Creatures {
 		}
 
 		@Override
-		public boolean shouldContinue() {
+		public boolean canContinueToUse() {
 			return false;
 		}
 	}

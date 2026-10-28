@@ -3,8 +3,8 @@ package euf.mageslegacy.client;
 import euf.mageslegacy.bloodkin.Bloodkin;
 import euf.mageslegacy.race.Race;
 import euf.mageslegacy.race.Talents;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.entity.Entity;
+import net.minecraft.client.Minecraft;
+import net.minecraft.world.entity.Entity;
 
 /**
  * A Bloodkin hears the hearts around it: every creature with blood nearby shows through walls in a red outline, on
@@ -17,12 +17,12 @@ public final class HeartbeatSense {
 	}
 
 	public static boolean hears(Entity entity) {
-		MinecraftClient client = MinecraftClient.getInstance();
+		Minecraft client = Minecraft.getInstance();
 		if (ClientRaceState.race != Race.BLOODKIN || client.player == null || entity == client.player || !Bloodkin.hasBlood(entity)
 				|| Bloodkin.swarmBat(entity)) {
 			return false;
 		}
 		int range = ClientRaceState.talents.contains(Talents.NIGHT_SENSE) ? Bloodkin.SENSE_WIDE : Bloodkin.SENSE;
-		return entity.squaredDistanceTo(client.player) < range * range;
+		return entity.distanceToSqr(client.player) < range * range;
 	}
 }

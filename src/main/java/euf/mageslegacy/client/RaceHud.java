@@ -16,16 +16,16 @@ import euf.mageslegacy.tempter.Tempter;
 import euf.mageslegacy.voidborn.Voidborn;
 import java.util.LinkedHashMap;
 import java.util.Map;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.font.TextRenderer;
-import net.minecraft.client.gui.DrawContext;
-import net.minecraft.item.Item;
-import net.minecraft.item.ItemStack;
-import net.minecraft.item.Items;
-import net.minecraft.nbt.NbtCompound;
-import net.minecraft.nbt.NbtElement;
-import net.minecraft.nbt.NbtList;
-import net.minecraft.util.Identifier;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.Font;
+import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.ListTag;
+import net.minecraft.nbt.Tag;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 import org.jetbrains.annotations.Nullable;
 
 /**
@@ -166,12 +166,12 @@ public final class RaceHud {
 
 	/** The active squad from the sync: echo type id -> how many. */
 	public static Map<String, Integer> activeSquad() {
-		NbtList presets = ClientRaceState.extra.getList("presets", NbtElement.COMPOUND_TYPE);
+		ListTag presets = ClientRaceState.extra.getList("presets", Tag.TAG_COMPOUND);
 		int index = ClientRaceState.extra.getInt("activePreset");
 		Map<String, Integer> squad = new LinkedHashMap<>();
 		if (index < presets.size()) {
-			NbtCompound preset = presets.getCompound(index);
-			for (String key : preset.getKeys()) {
+			CompoundTag preset = presets.getCompound(index);
+			for (String key : preset.getAllKeys()) {
 				squad.put(key, preset.getInt(key));
 			}
 		}
@@ -187,7 +187,7 @@ public final class RaceHud {
 		if (squad.isEmpty()) {
 			return -1;
 		}
-		NbtCompound alive = ClientRaceState.extra.getCompound("alive");
+		CompoundTag alive = ClientRaceState.extra.getCompound("alive");
 		boolean quiet = ClientRaceState.talents.contains(Talents.LEGION_CHEAP);
 		int total = 0;
 		int min = Integer.MAX_VALUE;
@@ -219,40 +219,40 @@ public final class RaceHud {
 	}
 
 	/** An ability's icon: the Codex texture if it ships, the item otherwise. */
-	public static void drawAbility(DrawContext ctx, Race race, int slot, int x, int y, boolean bright) {
+	public static void drawAbility(GuiGraphics ctx, Race race, int slot, int x, int y, boolean bright) {
 		// The Masked's Power shows the worn face, the Change the face that comes next
 		if (race == Race.MASKED && (slot == 1 || slot == 2)) {
 			Face face = Face.byId(ClientRaceState.extra.getString(slot == 1 ? "face" : "next")).orElse(null);
 			if (face != null) {
-				ctx.drawItem(new ItemStack(face.egg), x, y);
+				ctx.renderItem(new ItemStack(face.egg), x, y);
 				return;
 			}
 		}
 		String icon = abilityIcon(race, slot);
-		Identifier texture = icon == null ? null : LegacyUi.icon(icon);
+		ResourceLocation texture = icon == null ? null : LegacyUi.icon(icon);
 		if (texture != null && LegacyUi.exists(texture)) {
 			LegacyUi.icon(ctx, texture, x, y, 16, bright);
 		} else if (race == Race.MYCELID) {
-			ctx.drawItem(new ItemStack(MYCELID_ICONS[slot]), x, y);
+			ctx.renderItem(new ItemStack(MYCELID_ICONS[slot]), x, y);
 		} else if (race == Race.FROZEN) {
-			ctx.drawItem(new ItemStack(FROZEN_ICONS[slot]), x, y);
+			ctx.renderItem(new ItemStack(FROZEN_ICONS[slot]), x, y);
 		} else if (race == Race.BLOODKIN) {
-			ctx.drawItem(new ItemStack(BLOODKIN_ICONS[slot]), x, y);
+			ctx.renderItem(new ItemStack(BLOODKIN_ICONS[slot]), x, y);
 		} else if (race == Race.VOIDBORN) {
-			ctx.drawItem(new ItemStack(VOIDBORN_ICONS[slot]), x, y);
+			ctx.renderItem(new ItemStack(VOIDBORN_ICONS[slot]), x, y);
 		} else if (race == Race.MERCENARY) {
-			ctx.drawItem(new ItemStack(MERCENARY_ICONS[slot]), x, y);
+			ctx.renderItem(new ItemStack(MERCENARY_ICONS[slot]), x, y);
 		} else if (race == Race.TEMPTER) {
-			ctx.drawItem(new ItemStack(TEMPTER_ICONS[slot]), x, y);
+			ctx.renderItem(new ItemStack(TEMPTER_ICONS[slot]), x, y);
 		} else if (race == Race.MASKED) {
-			ctx.drawItem(new ItemStack(MASKED_ICONS[slot]), x, y);
+			ctx.renderItem(new ItemStack(MASKED_ICONS[slot]), x, y);
 		} else if (race == Race.SHEPHERD) {
 			// The Call shows the first echo of its squad
 			EchoType echo = slot == 0 ? activeSquad().keySet().stream().findFirst().flatMap(EchoType::byId).orElse(null) : null;
 			if (echo != null) {
 				LegacyUi.portrait(ctx, "echo", echo.path(), echo.icon(), x, y, bright);
 			} else {
-				ctx.drawItem(new ItemStack(SHEPHERD_ICONS[slot]), x, y);
+				ctx.renderItem(new ItemStack(SHEPHERD_ICONS[slot]), x, y);
 			}
 		}
 	}
@@ -293,7 +293,7 @@ public final class RaceHud {
 	}
 
 	/** A pressed slot answers at once: a pulse in the race's colour when it fires, a red blink when it can't. */
-	private static void pressFlash(DrawContext ctx, int slot, int sx, int sy, int color) {
+	private static void pressFlash(GuiGraphics ctx, int slot, int sx, int sy, int color) {
 		long since = ClientRaceState.clientTicks() - PRESSED[slot];
 		if (PRESSED[slot] == 0 || since > 8) {
 			return;
@@ -310,15 +310,15 @@ public final class RaceHud {
 		}
 	}
 
-	public static void render(DrawContext ctx, float tickDelta) {
-		MinecraftClient client = MinecraftClient.getInstance();
+	public static void render(GuiGraphics ctx, float tickDelta) {
+		Minecraft client = Minecraft.getInstance();
 		Race race = ClientRaceState.race;
-		if (race == null || client.options.hudHidden || client.player == null || client.player.isSpectator()) {
+		if (race == null || client.options.hideGui || client.player == null || client.player.isSpectator()) {
 			return;
 		}
-		TextRenderer tr = client.textRenderer;
-		int w = ctx.getScaledWindowWidth();
-		int h = ctx.getScaledWindowHeight();
+		Font tr = client.font;
+		int w = ctx.guiWidth();
+		int h = ctx.guiHeight();
 		int color = LegacyUi.argb(race.color);
 
 		// The vial, clear of the offhand slot
@@ -345,20 +345,20 @@ public final class RaceHud {
 		}
 		// A Mercenary's bar is the first contract in hand, done so far
 		String amount = (int) ClientRaceState.resource + (race == Race.MERCENARY ? "%" : "");
-		ctx.drawText(tr, amount, barX + 3 - tr.getWidth(amount) / 2, barTop - 11, color, true);
+		ctx.drawString(tr, amount, barX + 3 - tr.width(amount) / 2, barTop - 11, color, true);
 		if (race == Race.SHEPHERD) {
 			// Bond slots in use, over the voice icon; red when full
 			int used = ClientRaceState.extra.getInt("capUsed");
 			int max = ClientRaceState.extra.getInt("capMax");
 			String cap = used + "/" + max;
-			ctx.drawText(tr, cap, barX - 20 - tr.getWidth(cap), h - 15, used >= max ? LegacyUi.RED : LegacyUi.GOLD, true);
+			ctx.drawString(tr, cap, barX - 20 - tr.width(cap), h - 15, used >= max ? LegacyUi.RED : LegacyUi.GOLD, true);
 		}
 		if (race == Race.MASKED) {
 			// How fresh the worn face still is, over the essence icon; red when it's about to crumble, a dash when faceless
 			boolean faceless = ClientRaceState.extra.getString("face").isEmpty();
 			int fresh = ClientRaceState.extra.getInt("fresh");
 			String text = faceless ? "—" : fresh + "%";
-			ctx.drawText(tr, text, barX - 20 - tr.getWidth(text), h - 15, faceless || fresh <= 15 ? LegacyUi.RED : 0xFFE8DCC0, true);
+			ctx.drawString(tr, text, barX - 20 - tr.width(text), h - 15, faceless || fresh <= 15 ? LegacyUi.RED : 0xFFE8DCC0, true);
 		}
 
 		if (!hasAbilities(race)) {
@@ -386,48 +386,48 @@ public final class RaceHud {
 			if (race == Race.SHEPHERD && slot == 2) {
 				// The Whistle's order in the corner: back to heel, guard, hunt
 				String order = STANCE_MARKS[Math.floorMod(ClientRaceState.extra.getInt("stance"), 3)];
-				ctx.getMatrices().push();
-				ctx.getMatrices().translate(0, 0, 250);
-				ctx.drawText(tr, order, sx, sy - 1, LegacyUi.GOLD, true);
-				ctx.getMatrices().pop();
+				ctx.pose().pushPose();
+				ctx.pose().translate(0, 0, 250);
+				ctx.drawString(tr, order, sx, sy - 1, LegacyUi.GOLD, true);
+				ctx.pose().popPose();
 			}
 			if (releases(race, slot)) {
 				// Someone is held in the pocket: the slot glows, a mark says the key brings them back
 				LegacyUi.outline(ctx, sx - 2, sy - 2, sx + 20, sy + 20, 0xFFB89BFF);
-				ctx.getMatrices().push();
-				ctx.getMatrices().translate(0, 0, 250);
-				ctx.drawText(tr, "↩", sx, sy - 1, 0xFFD8C8FF, true);
-				ctx.getMatrices().pop();
+				ctx.pose().pushPose();
+				ctx.pose().translate(0, 0, 250);
+				ctx.drawString(tr, "↩", sx, sy - 1, 0xFFD8C8FF, true);
+				ctx.pose().popPose();
 			}
 			if (race == Race.SHEPHERD && slot == 0) {
 				// The active squad's numeral in the corner
 				String numeral = Shepherd.ROMAN[Math.floorMod(ClientRaceState.extra.getInt("activePreset"), 3)];
-				ctx.getMatrices().push();
-				ctx.getMatrices().translate(0, 0, 250);
-				ctx.drawText(tr, numeral, sx, sy - 1, 0xFF9FE8E0, true);
-				ctx.getMatrices().pop();
+				ctx.pose().pushPose();
+				ctx.pose().translate(0, 0, 250);
+				ctx.drawString(tr, numeral, sx, sy - 1, 0xFF9FE8E0, true);
+				ctx.pose().popPose();
 			}
-			ctx.getMatrices().push();
-			ctx.getMatrices().translate(0, 0, 200);
+			ctx.pose().pushPose();
+			ctx.pose().translate(0, 0, 200);
 			pressFlash(ctx, slot, sx, sy, color);
 			if (locked) {
 				// Not open yet: dark, with the race level it opens at
 				ctx.fill(sx, sy, sx + 18, sy + 18, 0xC0000000);
 				String lvl = String.valueOf(AbilitySlots.unlockLevel(race, slot));
-				ctx.drawText(tr, lvl, sx + 9 - tr.getWidth(lvl) / 2, sy + 5, 0xFF9A9088, true);
+				ctx.drawString(tr, lvl, sx + 9 - tr.width(lvl) / 2, sy + 5, 0xFF9A9088, true);
 			} else if (cooling) {
 				ctx.fill(sx, sy, sx + 18, sy + 18, 0x90000000);
 				String secs = String.valueOf((cooldown + 19) / 20);
-				ctx.drawText(tr, secs, sx + 9 - tr.getWidth(secs) / 2, sy + 5, 0xFFFFFFFF, true);
+				ctx.drawString(tr, secs, sx + 9 - tr.width(secs) / 2, sy + 5, 0xFFFFFFFF, true);
 			} else if (short_) {
 				ctx.fill(sx, sy, sx + 18, sy + 18, 0x50A01818);
 			}
 			String key = MagesLegacyClient.keyLabel(MagesLegacyClient.ABILITY_KEYS[slot]);
 			LegacyUi.keyCap(ctx, key, sx + 21, sy + 22, ready ? 0xFFFFFFFF : 0xFF9A9088);
 			if (chain) {
-				ctx.drawText(tr, "x" + ClientRaceState.chainLeft, sx + 1, sy + 1, LegacyUi.mix(color, 0xFFFFFFFF, 0.4f), true);
+				ctx.drawString(tr, "x" + ClientRaceState.chainLeft, sx + 1, sy + 1, LegacyUi.mix(color, 0xFFFFFFFF, 0.4f), true);
 			}
-			ctx.getMatrices().pop();
+			ctx.pose().popPose();
 		}
 	}
 }

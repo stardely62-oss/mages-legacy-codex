@@ -1,17 +1,17 @@
 package euf.mageslegacy.client;
 
+import com.mojang.blaze3d.vertex.PoseStack;
 import java.util.HashMap;
 import java.util.Map;
 import net.fabricmc.fabric.api.client.rendering.v1.WorldRenderContext;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.font.TextRenderer;
-import net.minecraft.client.render.Camera;
-import net.minecraft.client.render.LightmapTextureManager;
-import net.minecraft.client.render.VertexConsumerProvider;
-import net.minecraft.client.util.math.MatrixStack;
-import net.minecraft.network.PacketByteBuf;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.Vec3d;
+import net.minecraft.client.Camera;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.Font;
+import net.minecraft.client.renderer.LightTexture;
+import net.minecraft.client.renderer.MultiBufferSource;
+import net.minecraft.core.BlockPos;
+import net.minecraft.network.FriendlyByteBuf;
+import net.minecraft.world.phys.Vec3;
 import org.joml.Matrix4f;
 
 /**
@@ -27,7 +27,7 @@ public final class QuickenVisuals {
 	private QuickenVisuals() {
 	}
 
-	public static void read(PacketByteBuf buf) {
+	public static void read(FriendlyByteBuf buf) {
 		long ticks = ClientRaceState.clientTicks();
 		UNTIL.clear();
 		int count = buf.readVarInt();
@@ -45,30 +45,30 @@ public final class QuickenVisuals {
 		if (UNTIL.isEmpty() || context.consumers() == null) {
 			return;
 		}
-		MinecraftClient client = MinecraftClient.getInstance();
+		Minecraft client = Minecraft.getInstance();
 		long now = ClientRaceState.clientTicks();
 		UNTIL.values().removeIf(until -> until <= now);
 		Camera camera = context.camera();
-		Vec3d cam = camera.getPos();
-		MatrixStack matrices = context.matrixStack();
-		VertexConsumerProvider consumers = context.consumers();
-		TextRenderer font = client.textRenderer;
+		Vec3 cam = camera.getPosition();
+		PoseStack matrices = context.matrixStack();
+		MultiBufferSource consumers = context.consumers();
+		Font font = client.font;
 		for (Map.Entry<BlockPos, Long> e : UNTIL.entrySet()) {
-			Vec3d at = Vec3d.ofCenter(e.getKey()).add(0, 0.95, 0);
-			if (at.squaredDistanceTo(cam) > SHOW_WITHIN * SHOW_WITHIN) {
+			Vec3 at = Vec3.atCenterOf(e.getKey()).add(0, 0.95, 0);
+			if (at.distanceToSqr(cam) > SHOW_WITHIN * SHOW_WITHIN) {
 				continue;
 			}
 			long seconds = (e.getValue() - now + 19) / 20;
 			String label = "⌛ " + seconds / 60 + ":" + String.format("%02d", seconds % 60);
-			matrices.push();
+			matrices.pushPose();
 			matrices.translate(at.x - cam.x, at.y - cam.y, at.z - cam.z);
-			matrices.multiply(camera.getRotation());
+			matrices.mulPose(camera.rotation());
 			matrices.scale(-0.025f, -0.025f, 0.025f);
-			Matrix4f matrix = matrices.peek().getPositionMatrix();
-			float x = -font.getWidth(label) / 2f;
-			font.draw(label, x, 0, GOLD, false, matrix, consumers, TextRenderer.TextLayerType.NORMAL, 0x60000000,
-					LightmapTextureManager.MAX_LIGHT_COORDINATE);
-			matrices.pop();
+			Matrix4f matrix = matrices.last().pose();
+			float x = -font.width(label) / 2f;
+			font.drawInBatch(label, x, 0, GOLD, false, matrix, consumers, Font.DisplayMode.NORMAL, 0x60000000,
+					LightTexture.FULL_BRIGHT);
+			matrices.popPose();
 		}
 	}
 }

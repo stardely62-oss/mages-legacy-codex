@@ -2,8 +2,8 @@ package euf.mageslegacy.client;
 
 import it.unimi.dsi.fastutil.ints.IntOpenHashSet;
 import it.unimi.dsi.fastutil.ints.IntSet;
-import net.minecraft.entity.Entity;
-import net.minecraft.network.PacketByteBuf;
+import net.minecraft.network.FriendlyByteBuf;
+import net.minecraft.world.entity.Entity;
 
 /** Which entities in the client's world are echoes, as the server told it; the renderer draws those as spirits. */
 public final class EchoVisuals {
@@ -16,7 +16,7 @@ public final class EchoVisuals {
 		return IDS.contains(entity.getId());
 	}
 
-	public static void read(PacketByteBuf buf) {
+	public static void read(FriendlyByteBuf buf) {
 		IDS.clear();
 		int count = buf.readVarInt();
 		for (int i = 0; i < count; i++) {

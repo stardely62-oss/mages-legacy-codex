@@ -1,11 +1,11 @@
 package euf.mageslegacy.mixin.client;
 
 import euf.mageslegacy.client.FxRenderer;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.network.ClientPlayNetworkHandler;
-import net.minecraft.entity.player.PlayerEntity;
-import net.minecraft.network.packet.s2c.play.PlayerPositionLookS2CPacket;
-import net.minecraft.util.math.Vec3d;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.multiplayer.ClientPacketListener;
+import net.minecraft.network.protocol.game.ClientboundPlayerPositionPacket;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.phys.Vec3;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
@@ -17,30 +17,30 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
  * previous position to the new one), which looks like a string of jumps; during such a flight the previous position
  * is kept, so the frames in between glide from step to step.
  */
-@Mixin(ClientPlayNetworkHandler.class)
+@Mixin(ClientPacketListener.class)
 public abstract class ClientPlayNetworkHandlerMixin {
 	@Unique
-	private Vec3d mages_legacy$before;
+	private Vec3 mages_legacy$before;
 
 	@Inject(method = "onPlayerPositionLook", at = @At("HEAD"))
-	private void mages_legacy$rememberStep(PlayerPositionLookS2CPacket packet, CallbackInfo ci) {
-		MinecraftClient client = MinecraftClient.getInstance();
+	private void mages_legacy$rememberStep(ClientboundPlayerPositionPacket packet, CallbackInfo ci) {
+		Minecraft client = Minecraft.getInstance();
 		// The handler first runs on the network thread only to hop over to the main one
-		mages_legacy$before = client.isOnThread() && client.player != null && FxRenderer.inFlight() ? client.player.getPos() : null;
+		mages_legacy$before = client.isSameThread() && client.player != null && FxRenderer.inFlight() ? client.player.position() : null;
 	}
 
 	@Inject(method = "onPlayerPositionLook", at = @At("TAIL"))
-	private void mages_legacy$glide(PlayerPositionLookS2CPacket packet, CallbackInfo ci) {
-		PlayerEntity player = MinecraftClient.getInstance().player;
+	private void mages_legacy$glide(ClientboundPlayerPositionPacket packet, CallbackInfo ci) {
+		Player player = Minecraft.getInstance().player;
 		if (mages_legacy$before == null || player == null) {
 			return;
 		}
-		player.prevX = mages_legacy$before.x;
-		player.prevY = mages_legacy$before.y;
-		player.prevZ = mages_legacy$before.z;
-		player.lastRenderX = mages_legacy$before.x;
-		player.lastRenderY = mages_legacy$before.y;
-		player.lastRenderZ = mages_legacy$before.z;
+		player.xo = mages_legacy$before.x;
+		player.yo = mages_legacy$before.y;
+		player.zo = mages_legacy$before.z;
+		player.xOld = mages_legacy$before.x;
+		player.yOld = mages_legacy$before.y;
+		player.zOld = mages_legacy$before.z;
 		mages_legacy$before = null;
 	}
 }

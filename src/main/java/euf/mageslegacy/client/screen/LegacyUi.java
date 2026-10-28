@@ -5,12 +5,13 @@ import euf.mageslegacy.MagesLegacy;
 import euf.mageslegacy.race.Race;
 import java.util.HashMap;
 import java.util.Map;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.gui.DrawContext;
-import net.minecraft.item.Item;
-import net.minecraft.item.ItemStack;
-import net.minecraft.util.Identifier;
-import net.minecraft.util.Util;
+import net.minecraft.Util;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.Font;
+import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemStack;
 
 /**
  * The look of the Mage's Legacy screens: dark carved stone with an antique gold rim, the race's own colour as the
@@ -33,26 +34,26 @@ public final class LegacyUi {
 	/** The five race colours, for the legend's embers. */
 	private static final int[] RACE_COLORS = {0x7FB069, 0xD9B26F, 0x8FB8DE, 0xB23A48, 0x9B7FD4, 0xC8823C, 0xD46A8E, 0xBFB6A3};
 
-	private static final Map<Identifier, Boolean> PRESENT = new HashMap<>();
+	private static final Map<ResourceLocation, Boolean> PRESENT = new HashMap<>();
 
 	private LegacyUi() {
 	}
 
-	public static Identifier gui(String path) {
-		return new Identifier(MagesLegacy.MOD_ID, "textures/gui/" + path + ".png");
+	public static ResourceLocation gui(String path) {
+		return ResourceLocation.fromNamespaceAndPath(MagesLegacy.MOD_ID, "textures/gui/" + path + ".png");
 	}
 
-	public static Identifier emblem(Race race) {
+	public static ResourceLocation emblem(Race race) {
 		return gui("emblem/" + race.id());
 	}
 
-	public static Identifier icon(String name) {
+	public static ResourceLocation icon(String name) {
 		return gui("icon/" + name);
 	}
 
 	/** Whether a texture ships with the mod, so screens can fall back to an item icon for art not drawn yet. */
-	public static boolean exists(Identifier texture) {
-		return PRESENT.computeIfAbsent(texture, id -> MinecraftClient.getInstance().getResourceManager().getResource(id).isPresent());
+	public static boolean exists(ResourceLocation texture) {
+		return PRESENT.computeIfAbsent(texture, id -> Minecraft.getInstance().getResourceManager().getResource(id).isPresent());
 	}
 
 	public static int argb(int rgb) {
@@ -61,7 +62,7 @@ public final class LegacyUi {
 
 	/** Seconds since start, for animations. */
 	public static float time() {
-		return (Util.getMeasuringTimeMs() % 3_600_000L) / 1000f;
+		return (Util.getMillis() % 3_600_000L) / 1000f;
 	}
 
 	public static float hash(int i, int salt) {
@@ -90,10 +91,10 @@ public final class LegacyUi {
 	 * The screen behind: a dark haze with embers drifting up. With a race they glow in its colour; without one (the
 	 * legend, the choice) in all five.
 	 */
-	public static void background(DrawContext context, int width, int height, Race race) {
+	public static void background(GuiGraphics context, int width, int height, Race race) {
 		context.fillGradient(0, 0, width, height, 0xE8100C12, 0xF4050406);
 		float t = time();
-		context.draw(() -> {
+		context.drawManaged(() -> {
 			for (int i = 0; i < 54; i++) {
 				float speed = 5 + hash(i, 1) * 12;
 				int x = (int) (hash(i, 2) * width + Math.sin(t * 0.6 + i) * 6);
@@ -107,11 +108,11 @@ public final class LegacyUi {
 	}
 
 	/** A carved stone slab: black outline, dark body, an antique gold rim and a rivet in every corner. */
-	public static void panel(DrawContext context, int x0, int y0, int x1, int y1) {
+	public static void panel(GuiGraphics context, int x0, int y0, int x1, int y1) {
 		panel(context, x0, y0, x1, y1, RIM);
 	}
 
-	public static void panel(DrawContext context, int x0, int y0, int x1, int y1, int rim) {
+	public static void panel(GuiGraphics context, int x0, int y0, int x1, int y1, int rim) {
 		context.fill(x0 - 1, y0 - 1, x1 + 1, y1 + 1, BLACK);
 		context.fillGradient(x0, y0, x1, y1, 0xF018131C, 0xF00C090E);
 		outline(context, x0, y0, x1, y1, rim);
@@ -122,14 +123,14 @@ public final class LegacyUi {
 		}
 	}
 
-	public static void outline(DrawContext context, int x0, int y0, int x1, int y1, int color) {
+	public static void outline(GuiGraphics context, int x0, int y0, int x1, int y1, int color) {
 		context.fill(x0, y0, x1, y0 + 1, color);
 		context.fill(x0, y1 - 1, x1, y1, color);
 		context.fill(x0, y0, x0 + 1, y1, color);
 		context.fill(x1 - 1, y0, x1, y1, color);
 	}
 
-	public static void diamond(DrawContext context, int x, int y, int r, int color) {
+	public static void diamond(GuiGraphics context, int x, int y, int r, int color) {
 		for (int dy = -r; dy <= r; dy++) {
 			int half = r - Math.abs(dy);
 			context.fill(x - half, y + dy, x + half + 1, y + dy + 1, color);
@@ -137,7 +138,7 @@ public final class LegacyUi {
 	}
 
 	/** A thin line fading out at both ends, with a gem in the middle. */
-	public static void divider(DrawContext context, int x0, int x1, int y, int gem) {
+	public static void divider(GuiGraphics context, int x0, int x1, int y, int gem) {
 		int mid = (x0 + x1) / 2;
 		int half = (x1 - x0) / 2;
 		int steps = 12;
@@ -153,10 +154,10 @@ public final class LegacyUi {
 	}
 
 	/** A heading between two short fading lines, in gold or the given colour. */
-	public static void heading(DrawContext context, net.minecraft.text.Text text, int cx, int y, int color) {
-		var tr = MinecraftClient.getInstance().textRenderer;
-		int tw = tr.getWidth(text);
-		context.drawTextWithShadow(tr, text, cx - tw / 2, y, color);
+	public static void heading(GuiGraphics context, net.minecraft.network.chat.Component text, int cx, int y, int color) {
+		var tr = Minecraft.getInstance().font;
+		int tw = tr.width(text);
+		context.drawString(tr, text, cx - tw / 2, y, color);
 		int len = 28;
 		for (int i = 0; i < len; i++) {
 			int c = alpha(color, 0.8f * (1 - i / (float) len));
@@ -169,7 +170,7 @@ public final class LegacyUi {
 	 * A stone button with a gold rim that takes on the accent colour under the mouse. The primary one is filled with
 	 * the accent and breathes while it can be pressed.
 	 */
-	public static void button(DrawContext context, int x, int y, int w, int h, boolean active, boolean hovered, boolean primary, int accent) {
+	public static void button(GuiGraphics context, int x, int y, int w, int h, boolean active, boolean hovered, boolean primary, int accent) {
 		int x1 = x + w;
 		int y1 = y + h;
 		context.fill(x, y, x1, y1, BLACK);
@@ -192,16 +193,16 @@ public final class LegacyUi {
 	}
 
 	/** A Codex texture drawn at the given size (icons are 32 px textures, emblems 64), dimmed when not available. */
-	public static void texture(DrawContext context, Identifier texture, int x, int y, int size, int textureSize, boolean bright) {
+	public static void texture(GuiGraphics context, ResourceLocation texture, int x, int y, int size, int textureSize, boolean bright) {
 		RenderSystem.enableBlend();
 		if (!bright) {
 			RenderSystem.setShaderColor(0.42f, 0.4f, 0.44f, 1f);
 		}
-		context.drawTexture(texture, x, y, size, size, 0, 0, textureSize, textureSize, textureSize, textureSize);
+		context.blit(texture, x, y, size, size, 0, 0, textureSize, textureSize, textureSize, textureSize);
 		RenderSystem.setShaderColor(1f, 1f, 1f, 1f);
 	}
 
-	public static void icon(DrawContext context, Identifier icon, int x, int y, int size, boolean bright) {
+	public static void icon(GuiGraphics context, ResourceLocation icon, int x, int y, int size, boolean bright) {
 		texture(context, icon, x, y, size, 32, bright);
 	}
 
@@ -209,25 +210,25 @@ public final class LegacyUi {
 	 * A creature's portrait from the bestiary art (textures/gui/beast or gui/echo, 32 px), or its spawn egg while the
 	 * portrait isn't drawn yet.
 	 */
-	public static void portrait(DrawContext context, String folder, String id, Item fallback, int x, int y, boolean bright) {
-		Identifier texture = gui(folder + "/" + id);
+	public static void portrait(GuiGraphics context, String folder, String id, Item fallback, int x, int y, boolean bright) {
+		ResourceLocation texture = gui(folder + "/" + id);
 		if (exists(texture)) {
 			texture(context, texture, x, y, 16, 32, bright);
 		} else {
-			context.drawItem(new ItemStack(fallback), x, y);
+			context.renderItem(new ItemStack(fallback), x, y);
 		}
 	}
 
-	public static void emblem(DrawContext context, Race race, int x, int y, int size, boolean bright) {
+	public static void emblem(GuiGraphics context, Race race, int x, int y, int size, boolean bright) {
 		texture(context, emblem(race), x, y, size, 64, bright);
 	}
 
 	/** A soft glow behind something round: rings of fading colour. */
-	public static void glow(DrawContext context, int cx, int cy, int radius, int color, float strength) {
-		context.draw(() -> glowRings(context, cx, cy, radius, color, strength));
+	public static void glow(GuiGraphics context, int cx, int cy, int radius, int color, float strength) {
+		context.drawManaged(() -> glowRings(context, cx, cy, radius, color, strength));
 	}
 
-	private static void glowRings(DrawContext context, int cx, int cy, int radius, int color, float strength) {
+	private static void glowRings(GuiGraphics context, int cx, int cy, int radius, int color, float strength) {
 		for (int r = radius; r > 0; r -= 2) {
 			float a = strength * (1 - r / (float) radius) * 0.35f;
 			int c = alpha(color, a);
@@ -241,14 +242,14 @@ public final class LegacyUi {
 	}
 
 	/** A key cap: a small dark box with the key's letter, as on a keyboard. */
-	public static void keyCap(DrawContext context, String key, int rightX, int bottomY, int color) {
-		var tr = MinecraftClient.getInstance().textRenderer;
-		int w = Math.max(9, tr.getWidth(key) + 4);
+	public static void keyCap(GuiGraphics context, String key, int rightX, int bottomY, int color) {
+		var tr = Minecraft.getInstance().font;
+		int w = Math.max(9, tr.width(key) + 4);
 		int x0 = rightX - w;
 		int y0 = bottomY - 10;
 		context.fill(x0, y0, rightX, bottomY, BLACK);
 		context.fill(x0 + 1, y0 + 1, rightX - 1, bottomY - 1, 0xFF2A2328);
 		context.fill(x0 + 1, bottomY - 2, rightX - 1, bottomY - 1, 0xFF181418);
-		context.drawText(tr, key, x0 + (w - tr.getWidth(key)) / 2 + 1, y0 + 1, color, false);
+		context.drawString(tr, key, x0 + (w - tr.width(key)) / 2 + 1, y0 + 1, color, false);
 	}
 }

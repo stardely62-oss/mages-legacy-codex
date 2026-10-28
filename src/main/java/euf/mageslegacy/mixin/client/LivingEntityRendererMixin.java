@@ -1,10 +1,10 @@
 package euf.mageslegacy.mixin.client;
 
+import com.mojang.blaze3d.vertex.PoseStack;
 import euf.mageslegacy.client.EchoVisuals;
-import net.minecraft.client.render.VertexConsumerProvider;
-import net.minecraft.client.render.entity.LivingEntityRenderer;
-import net.minecraft.client.util.math.MatrixStack;
-import net.minecraft.entity.LivingEntity;
+import net.minecraft.client.renderer.MultiBufferSource;
+import net.minecraft.client.renderer.entity.LivingEntityRenderer;
+import net.minecraft.world.entity.LivingEntity;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -22,7 +22,7 @@ public abstract class LivingEntityRendererMixin {
 
 	@Inject(method = "render(Lnet/minecraft/entity/LivingEntity;FFLnet/minecraft/client/util/math/MatrixStack;Lnet/minecraft/client/render/VertexConsumerProvider;I)V",
 			at = @At("HEAD"))
-	private void mages_legacy$remember(LivingEntity entity, float yaw, float delta, MatrixStack matrices, VertexConsumerProvider vertices, int light,
+	private void mages_legacy$remember(LivingEntity entity, float yaw, float delta, PoseStack matrices, MultiBufferSource vertices, int light,
 			CallbackInfo ci) {
 		mages_legacy$echo = EchoVisuals.isEcho(entity);
 	}

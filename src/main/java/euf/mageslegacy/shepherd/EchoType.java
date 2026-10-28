@@ -2,10 +2,10 @@ package euf.mageslegacy.shepherd;
 
 import java.util.List;
 import java.util.Optional;
-import net.minecraft.entity.EntityType;
-import net.minecraft.item.Item;
-import net.minecraft.item.Items;
-import net.minecraft.registry.Registries;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.item.Items;
 
 /**
  * The echoes a Shepherd can learn: kill enough of a kind and its echo answers the Call. {@code kills} unlock it,
@@ -40,12 +40,12 @@ public record EchoType(EntityType<?> type, int kills, int capacity, int voice, I
 			new EchoType(EntityType.RAVAGER, 5, 6, 60, Items.RAVAGER_SPAWN_EGG));
 
 	public String id() {
-		return Registries.ENTITY_TYPE.getId(type).toString();
+		return BuiltInRegistries.ENTITY_TYPE.getKey(type).toString();
 	}
 
 	/** The id without its namespace ("zombie"): portraits and trait texts go by it. */
 	public String path() {
-		return Registries.ENTITY_TYPE.getId(type).getPath();
+		return BuiltInRegistries.ENTITY_TYPE.getKey(type).getPath();
 	}
 
 	/** Kills needed to learn it. */

@@ -12,11 +12,11 @@ import euf.mageslegacy.shepherd.Shepherd;
 import euf.mageslegacy.masked.Masked;
 import euf.mageslegacy.tempter.Tempter;
 import euf.mageslegacy.voidborn.Voidborn;
-import net.minecraft.entity.LivingEntity;
-import net.minecraft.entity.damage.DamageSource;
-import net.minecraft.entity.effect.StatusEffectInstance;
-import net.minecraft.entity.player.PlayerEntity;
-import net.minecraft.server.network.ServerPlayerEntity;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.damagesource.DamageSource;
+import net.minecraft.world.effect.MobEffectInstance;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.player.Player;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -33,18 +33,18 @@ public abstract class LivingEntityMixin {
 	@ModifyVariable(method = "damage", at = @At("HEAD"), argsOnly = true, ordinal = 0)
 	private float mages_legacy$raceDamage(float amount, DamageSource source) {
 		LivingEntity self = (LivingEntity) (Object) this;
-		if (self.getWorld().isClient()) {
+		if (self.level().isClientSide()) {
 			return amount;
 		}
-		Race race = self instanceof ServerPlayerEntity player ? RaceState.raceOf(player).orElse(null) : null;
+		Race race = self instanceof ServerPlayer player ? RaceState.raceOf(player).orElse(null) : null;
 		if (race == Race.MYCELID) {
-			amount = Mycelid.modifyDamage((ServerPlayerEntity) self, source, amount);
+			amount = Mycelid.modifyDamage((ServerPlayer) self, source, amount);
 		} else if (race == Race.FROZEN) {
-			amount = Frozen.modifyDamage((ServerPlayerEntity) self, source, amount);
+			amount = Frozen.modifyDamage((ServerPlayer) self, source, amount);
 		} else if (race == Race.MERCENARY) {
-			amount = Mercenary.modifyDamage((ServerPlayerEntity) self, source, amount);
+			amount = Mercenary.modifyDamage((ServerPlayer) self, source, amount);
 		} else if (race == Race.MASKED) {
-			amount = Masked.modifyDamage((ServerPlayerEntity) self, source, amount);
+			amount = Masked.modifyDamage((ServerPlayer) self, source, amount);
 		}
 		amount = Progression.scale(source, amount);
 		Voidborn.onHurt(self, amount);
@@ -54,17 +54,17 @@ public abstract class LivingEntityMixin {
 		amount = Tempter.onHit(self, source, amount);
 		amount = Masked.onHit(self, source, amount);
 		amount = Shepherd.modifyDamage(self, source, amount);
-		return race == Race.TEMPTER ? Tempter.modifyDamage((ServerPlayerEntity) self, source, amount) : amount;
+		return race == Race.TEMPTER ? Tempter.modifyDamage((ServerPlayer) self, source, amount) : amount;
 	}
 
 	/** A Masked in a spider's face climbs walls like a ladder; the client decides for its own player, the server for all. */
 	@Inject(method = "isClimbing", at = @At("RETURN"), cancellable = true)
 	private void mages_legacy$spiderFace(CallbackInfoReturnable<Boolean> cir) {
 		LivingEntity self = (LivingEntity) (Object) this;
-		if (cir.getReturnValueZ() || !(self instanceof PlayerEntity player) || !player.horizontalCollision || player.isSpectator()) {
+		if (cir.getReturnValueZ() || !(self instanceof Player player) || !player.horizontalCollision || player.isSpectator()) {
 			return;
 		}
-		if (self.getWorld().isClient() ? player.isMainPlayer() && ClientRaceView.climbs : Masked.climbs(player)) {
+		if (self.level().isClientSide() ? player.isLocalPlayer() && ClientRaceView.climbs : Masked.climbs(player)) {
 			cir.setReturnValue(true);
 		}
 	}
@@ -73,7 +73,7 @@ public abstract class LivingEntityMixin {
 	@Inject(method = "damage", at = @At("HEAD"), cancellable = true)
 	private void mages_legacy$friendlyFire(DamageSource source, float amount, CallbackInfoReturnable<Boolean> cir) {
 		LivingEntity self = (LivingEntity) (Object) this;
-		if (!self.getWorld().isClient() && (Shepherd.friendlyFire(self, source) || Frozen.avoids(self, source) || Bloodkin.avoids(self)
+		if (!self.level().isClientSide() && (Shepherd.friendlyFire(self, source) || Frozen.avoids(self, source) || Bloodkin.avoids(self)
 				|| Voidborn.avoids(self, source))) {
 			cir.setReturnValue(false);
 		}
@@ -81,8 +81,8 @@ public abstract class LivingEntityMixin {
 
 	@ModifyVariable(method = "addStatusEffect(Lnet/minecraft/entity/effect/StatusEffectInstance;Lnet/minecraft/entity/Entity;)Z",
 			at = @At("HEAD"), argsOnly = true)
-	private StatusEffectInstance mages_legacy$shorterEffects(StatusEffectInstance effect) {
+	private MobEffectInstance mages_legacy$shorterEffects(MobEffectInstance effect) {
 		LivingEntity self = (LivingEntity) (Object) this;
-		return self.getWorld().isClient() ? effect : Frozen.shorten(self, effect);
+		return self.level().isClientSide() ? effect : Frozen.shorten(self, effect);
 	}
 }

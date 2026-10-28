@@ -7,43 +7,43 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
-import net.minecraft.entity.player.PlayerEntity;
-import net.minecraft.nbt.NbtCompound;
-import net.minecraft.nbt.NbtElement;
-import net.minecraft.nbt.NbtList;
-import net.minecraft.registry.RegistryKey;
-import net.minecraft.registry.RegistryKeys;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.GlobalPos;
+import net.minecraft.core.registries.Registries;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.ListTag;
+import net.minecraft.nbt.Tag;
+import net.minecraft.resources.ResourceKey;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
-import net.minecraft.util.Identifier;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.GlobalPos;
-import net.minecraft.world.PersistentState;
-import net.minecraft.world.World;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.level.saveddata.SavedData;
 
 /** Every player's race data and every mycelium node, saved with the overworld. */
-public class RaceState extends PersistentState {
+public class RaceState extends SavedData {
 	private final Map<UUID, RaceData> players = new HashMap<>();
 	/** Mycelium nodes per owner, oldest first. */
 	private final Map<UUID, List<GlobalPos>> nodes = new HashMap<>();
 
 	public static RaceState get(MinecraftServer server) {
-		return server.getOverworld().getPersistentStateManager().getOrCreate(RaceState::fromNbt, RaceState::new, MagesLegacy.MOD_ID);
+		return server.overworld().getDataStorage().computeIfAbsent(RaceState::fromNbt, RaceState::new, MagesLegacy.MOD_ID);
 	}
 
 	/** The player's data, or null on the client or before the server is up. */
-	public static RaceData of(PlayerEntity player) {
+	public static RaceData of(Player player) {
 		MinecraftServer server = player.getServer();
-		return server == null || player.getWorld().isClient ? null : get(server).data(player.getUuid());
+		return server == null || player.level().isClientSide ? null : get(server).data(player.getUUID());
 	}
 
-	public static Optional<Race> raceOf(PlayerEntity player) {
+	public static Optional<Race> raceOf(Player player) {
 		RaceData data = of(player);
 		return data == null ? Optional.empty() : Optional.ofNullable(data.race);
 	}
 
 	public RaceData data(UUID player) {
 		// Data changes in place all the time; saving it on every world save is cheap
-		markDirty();
+		setDirty();
 		return players.computeIfAbsent(player, id -> new RaceData());
 	}
 
@@ -56,29 +56,29 @@ public class RaceState extends PersistentState {
 		return nodes.computeIfAbsent(owner, id -> new ArrayList<>());
 	}
 
-	public Optional<UUID> nodeOwner(RegistryKey<World> dimension, BlockPos pos) {
-		GlobalPos key = GlobalPos.create(dimension, pos);
+	public Optional<UUID> nodeOwner(ResourceKey<Level> dimension, BlockPos pos) {
+		GlobalPos key = GlobalPos.of(dimension, pos);
 		return nodes.entrySet().stream().filter(e -> e.getValue().contains(key)).map(Map.Entry::getKey).findFirst();
 	}
 
-	public void removeNode(RegistryKey<World> dimension, BlockPos pos) {
-		GlobalPos key = GlobalPos.create(dimension, pos);
+	public void removeNode(ResourceKey<Level> dimension, BlockPos pos) {
+		GlobalPos key = GlobalPos.of(dimension, pos);
 		nodes.values().forEach(list -> list.remove(key));
-		markDirty();
+		setDirty();
 	}
 
 	@Override
-	public NbtCompound writeNbt(NbtCompound nbt) {
-		NbtCompound playerTag = new NbtCompound();
+	public CompoundTag save(CompoundTag nbt) {
+		CompoundTag playerTag = new CompoundTag();
 		players.forEach((id, data) -> playerTag.put(id.toString(), data.toNbt()));
 		nbt.put("players", playerTag);
-		NbtCompound nodeTag = new NbtCompound();
+		CompoundTag nodeTag = new CompoundTag();
 		nodes.forEach((id, list) -> {
-			NbtList entries = new NbtList();
+			ListTag entries = new ListTag();
 			for (GlobalPos pos : list) {
-				NbtCompound entry = new NbtCompound();
-				entry.putString("dim", pos.getDimension().getValue().toString());
-				entry.putLong("pos", pos.getPos().asLong());
+				CompoundTag entry = new CompoundTag();
+				entry.putString("dim", pos.dimension().location().toString());
+				entry.putLong("pos", pos.pos().asLong());
 				entries.add(entry);
 			}
 			nodeTag.put(id.toString(), entries);
@@ -87,19 +87,19 @@ public class RaceState extends PersistentState {
 		return nbt;
 	}
 
-	private static RaceState fromNbt(NbtCompound nbt) {
+	private static RaceState fromNbt(CompoundTag nbt) {
 		RaceState state = new RaceState();
-		NbtCompound playerTag = nbt.getCompound("players");
-		for (String key : playerTag.getKeys()) {
+		CompoundTag playerTag = nbt.getCompound("players");
+		for (String key : playerTag.getAllKeys()) {
 			state.players.put(UUID.fromString(key), RaceData.fromNbt(playerTag.getCompound(key)));
 		}
-		NbtCompound nodeTag = nbt.getCompound("nodes");
-		for (String key : nodeTag.getKeys()) {
+		CompoundTag nodeTag = nbt.getCompound("nodes");
+		for (String key : nodeTag.getAllKeys()) {
 			List<GlobalPos> list = new ArrayList<>();
-			for (NbtElement e : nodeTag.getList(key, NbtElement.COMPOUND_TYPE)) {
-				NbtCompound entry = (NbtCompound) e;
-				RegistryKey<World> dim = RegistryKey.of(RegistryKeys.WORLD, new Identifier(entry.getString("dim")));
-				list.add(GlobalPos.create(dim, BlockPos.fromLong(entry.getLong("pos"))));
+			for (Tag e : nodeTag.getList(key, Tag.TAG_COMPOUND)) {
+				CompoundTag entry = (CompoundTag) e;
+				ResourceKey<Level> dim = ResourceKey.create(Registries.DIMENSION, new ResourceLocation(entry.getString("dim")));
+				list.add(GlobalPos.of(dim, BlockPos.of(entry.getLong("pos"))));
 			}
 			state.nodes.put(UUID.fromString(key), list);
 		}

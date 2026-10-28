@@ -1,117 +1,32 @@
 plugins {
-	id 'fabric-loom' version "${loom_version}"
+    id 'java-library'
+    id 'net.neoforged.moddev' version '2.0.148'
 }
-
-// CI passes -Pbuild_number so every dev build gets a distinct jar name
 version = project.mod_version + (project.hasProperty('build_number') ? "+build.${project.build_number}" : '')
 group = project.maven_group
-
-base {
-	archivesName = project.archives_base_name
-}
-
-sourceSets {
-	// Test-only code (GameTests, screenshot harness, world generator). Never shipped in the mod jar.
-	gametest {
-		compileClasspath += main.compileClasspath + main.output
-		runtimeClasspath += main.runtimeClasspath + main.output
-	}
-}
-
-loom {
-	mods {
-		mages_legacy {
-			sourceSet sourceSets.main
-		}
-		mages_legacy_test {
-			sourceSet sourceSets.gametest
-		}
-	}
-
-	runs {
-		// Headless dedicated server that runs every @GameTest and writes a JUnit report
-		gametest {
-			server()
-			name 'Game Test'
-			vmArg '-Dfabric-api.gametest'
-			vmArg "-Dfabric-api.gametest.report-file=${project.layout.buildDirectory.get()}/gametest/junit.xml"
-			runDir 'build/gametest'
-			source sourceSets.gametest
-		}
-		// Dedicated server that creates a world for the harness and stops right away
-		genworld {
-			server()
-			name 'Generate Harness World'
-			vmArg '-Dmages_legacy.genworld=true'
-			runDir 'build/harness-server'
-			source sourceSets.gametest
-		}
-		// Real client (under Xvfb in CI) that plays a scripted scenario and saves screenshots
-		harness {
-			client()
-			name 'Harness Client'
-			vmArg '-Dmages_legacy.harness=true'
-			programArgs '--quickPlaySingleplayer', 'harness', '--width', '1280', '--height', '720'
-			runDir 'build/harness-client'
-			source sourceSets.gametest
-		}
-	}
-}
-
-tasks.named('runGametest') {
-	doFirst {
-		delete "${project.layout.buildDirectory.get()}/gametest/world"
-		delete "${project.layout.buildDirectory.get()}/gametest/junit.xml"
-	}
-}
-
-repositories {
-	// Trial VFX libraries, compiled against by the harness only (see FxPrototypes)
-	exclusiveContent {
-		forRepository {
-			maven {
-				name = 'Modrinth'
-				url = 'https://api.modrinth.com/maven'
-			}
-		}
-		filter {
-			includeGroup 'maven.modrinth'
-		}
-	}
-}
-
-dependencies {
-	minecraft "com.mojang:minecraft:${project.minecraft_version}"
-	mappings "net.fabricmc:yarn:${project.yarn_mappings}:v2"
-	modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
-	modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
-
-	// Not shipped and not loaded by the mod: the harness compares them with our own renderer
-	modCompileOnly('maven.modrinth:photon-editor:mc1.20.1-1.1.17-fabric') { transitive = false }
-	modCompileOnly('maven.modrinth:ldlib:mc1.20.1-1.0.42-fabric') { transitive = false }
-	modCompileOnly('maven.modrinth:lodestonelib:1.20.1-1.6.2.3f') { transitive = false }
-}
-
-processResources {
-	inputs.property 'version', project.version
-
-	filesMatching('fabric.mod.json') {
-		expand 'version': project.version
-	}
-}
-
-tasks.withType(JavaCompile).configureEach {
-	it.options.release = 17
-}
-
+base { archivesName = project.archives_base_name }
 java {
-	withSourcesJar()
-	sourceCompatibility = JavaVersion.VERSION_17
-	targetCompatibility = JavaVersion.VERSION_17
+    toolchain.languageVersion = JavaLanguageVersion.of(21)
+    withSourcesJar()
 }
-
-jar {
-	from('LICENSE') {
-		rename { "${it}_${project.base.archivesName.get()}" }
-	}
+neoForge {
+    version = project.neo_version
+    runs {
+        client { client() }
+        server { server(); programArgument '--nogui' }
+    }
+    mods {
+        "${mod_id}" { sourceSet(sourceSets.main) }
+    }
 }
+processResources {
+    inputs.property 'version', project.version
+    filesMatching('META-INF/neoforge.mods.toml') { expand version: project.version }
+    exclude 'fabric.mod.json'
+}
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+    options.release = 21
+    options.compilerArgs += ['-Xmaxerrs', '1000']
+}
+jar { from('LICENSE') }

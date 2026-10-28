@@ -3,57 +3,57 @@ package euf.mageslegacy.block;
 import euf.mageslegacy.fx.ModParticles;
 import euf.mageslegacy.mycelid.Mycelid;
 import euf.mageslegacy.race.RaceState;
-import net.minecraft.block.Block;
-import net.minecraft.block.BlockState;
-import net.minecraft.block.ShapeContext;
-import net.minecraft.entity.player.PlayerEntity;
-import net.minecraft.particle.ParticleTypes;
-import net.minecraft.server.network.ServerPlayerEntity;
-import net.minecraft.server.world.ServerWorld;
-import net.minecraft.util.ActionResult;
-import net.minecraft.util.Hand;
-import net.minecraft.util.hit.BlockHitResult;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.random.Random;
-import net.minecraft.util.shape.VoxelShape;
-import net.minecraft.util.shape.VoxelShapes;
-import net.minecraft.world.BlockView;
-import net.minecraft.world.World;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.particles.ParticleTypes;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.util.RandomSource;
+import net.minecraft.world.InteractionHand;
+import net.minecraft.world.InteractionResult;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.level.BlockGetter;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.phys.BlockHitResult;
+import net.minecraft.world.phys.shapes.CollisionContext;
+import net.minecraft.world.phys.shapes.Shapes;
+import net.minecraft.world.phys.shapes.VoxelShape;
 
 /** A glowing mushroom a Mycelid grows; right click carries anyone to the next node of the same network. */
 public class MyceliumNodeBlock extends Block {
-	private static final VoxelShape SHAPE = VoxelShapes.union(
-			Block.createCuboidShape(6, 0, 6, 10, 7, 10),
-			Block.createCuboidShape(2, 7, 2, 14, 13, 14));
+	private static final VoxelShape SHAPE = Shapes.or(
+			Block.box(6, 0, 6, 10, 7, 10),
+			Block.box(2, 7, 2, 14, 13, 14));
 
-	public MyceliumNodeBlock(Settings settings) {
+	public MyceliumNodeBlock(Properties settings) {
 		super(settings);
 	}
 
 	@Override
-	public VoxelShape getOutlineShape(BlockState state, BlockView world, BlockPos pos, ShapeContext context) {
+	public VoxelShape getShape(BlockState state, BlockGetter world, BlockPos pos, CollisionContext context) {
 		return SHAPE;
 	}
 
 	@Override
-	public ActionResult onUse(BlockState state, World world, BlockPos pos, PlayerEntity player, Hand hand, BlockHitResult hit) {
-		if (world.isClient) {
-			return ActionResult.SUCCESS;
+	public InteractionResult use(BlockState state, Level world, BlockPos pos, Player player, InteractionHand hand, BlockHitResult hit) {
+		if (world.isClientSide) {
+			return InteractionResult.SUCCESS;
 		}
-		return Mycelid.travel((ServerPlayerEntity) player, pos) ? ActionResult.CONSUME : ActionResult.PASS;
+		return Mycelid.travel((ServerPlayer) player, pos) ? InteractionResult.CONSUME : InteractionResult.PASS;
 	}
 
 	@Override
-	public void onStateReplaced(BlockState state, World world, BlockPos pos, BlockState newState, boolean moved) {
-		if (!state.isOf(newState.getBlock()) && world instanceof ServerWorld serverWorld) {
-			RaceState.get(serverWorld.getServer()).removeNode(world.getRegistryKey(), pos);
+	public void onRemove(BlockState state, Level world, BlockPos pos, BlockState newState, boolean moved) {
+		if (!state.is(newState.getBlock()) && world instanceof ServerLevel serverWorld) {
+			RaceState.get(serverWorld.getServer()).removeNode(world.dimension(), pos);
 		}
-		super.onStateReplaced(state, world, pos, newState, moved);
+		super.onRemove(state, world, pos, newState, moved);
 	}
 
 	/** A living node breathes: glowing spores keep drifting up from it, now and then a blossom's speck. */
 	@Override
-	public void randomDisplayTick(BlockState state, World world, BlockPos pos, Random random) {
+	public void animateTick(BlockState state, Level world, BlockPos pos, RandomSource random) {
 		for (int i = 0; i < 4; i++) {
 			world.addParticle(ModParticles.SPORE, pos.getX() + 0.5 + (random.nextDouble() - 0.5) * 0.8, pos.getY() + 0.4 + random.nextDouble() * 0.6,
 					pos.getZ() + 0.5 + (random.nextDouble() - 0.5) * 0.8, 0, 0.02, 0);

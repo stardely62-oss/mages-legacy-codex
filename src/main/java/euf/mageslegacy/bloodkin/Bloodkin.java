@@ -17,34 +17,34 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
-import net.minecraft.entity.Entity;
-import net.minecraft.entity.EntityType;
-import net.minecraft.entity.EquipmentSlot;
-import net.minecraft.entity.LivingEntity;
-import net.minecraft.entity.damage.DamageSource;
-import net.minecraft.entity.damage.DamageTypes;
-import net.minecraft.entity.decoration.ArmorStandEntity;
-import net.minecraft.entity.effect.StatusEffect;
-import net.minecraft.entity.effect.StatusEffectInstance;
-import net.minecraft.entity.effect.StatusEffects;
-import net.minecraft.entity.mob.MobEntity;
-import net.minecraft.entity.mob.Monster;
-import net.minecraft.entity.passive.BatEntity;
-import net.minecraft.entity.passive.GolemEntity;
-import net.minecraft.entity.passive.TameableEntity;
-import net.minecraft.entity.player.PlayerEntity;
-import net.minecraft.item.FoodComponent;
+import net.minecraft.ChatFormatting;
+import net.minecraft.core.BlockPos;
+import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
-import net.minecraft.server.network.ServerPlayerEntity;
-import net.minecraft.server.world.ServerWorld;
-import net.minecraft.sound.SoundCategory;
-import net.minecraft.sound.SoundEvents;
-import net.minecraft.text.Text;
-import net.minecraft.util.Formatting;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.Box;
-import net.minecraft.util.math.Vec3d;
-import net.minecraft.world.World;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.sounds.SoundEvents;
+import net.minecraft.sounds.SoundSource;
+import net.minecraft.world.damagesource.DamageSource;
+import net.minecraft.world.damagesource.DamageTypes;
+import net.minecraft.world.effect.MobEffect;
+import net.minecraft.world.effect.MobEffectInstance;
+import net.minecraft.world.effect.MobEffects;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.EquipmentSlot;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.Mob;
+import net.minecraft.world.entity.TamableAnimal;
+import net.minecraft.world.entity.ambient.Bat;
+import net.minecraft.world.entity.animal.AbstractGolem;
+import net.minecraft.world.entity.decoration.ArmorStand;
+import net.minecraft.world.entity.monster.Enemy;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.food.FoodProperties;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.Vec3;
 
 /**
  * Everything the Bloodkin do: blood as their resource, which only hunting fills and which slowly drains away;
@@ -95,11 +95,11 @@ public final class Bloodkin {
 	/** The deep red a Bloodkin's own heart beats in at the screen's edges. */
 	private static final int HEART_RGB = 0xB01226;
 
-	private record Dash(ServerPlayerEntity player, List<Vec3d> path, Set<UUID> hit, boolean free) {}
+	private record Dash(ServerPlayer player, List<Vec3> path, Set<UUID> hit, boolean free) {}
 
-	private record Bleed(ServerWorld world, long until, float perSecond, UUID owner) {}
+	private record Bleed(ServerLevel world, long until, float perSecond, UUID owner) {}
 
-	private record Swarm(ServerPlayerEntity player, long until, List<BatEntity> bats) {}
+	private record Swarm(ServerPlayer player, long until, List<Bat> bats) {}
 
 	private static final List<Dash> DASHES = new ArrayList<>();
 	private static final Map<UUID, Integer> DASH_STEP = new HashMap<>();
@@ -133,32 +133,32 @@ public final class Bloodkin {
 		DRUNK.clear();
 	}
 
-	public static boolean is(PlayerEntity player) {
-		return player instanceof ServerPlayerEntity sp && RaceState.raceOf(sp).orElse(null) == Race.BLOODKIN;
+	public static boolean is(Player player) {
+		return player instanceof ServerPlayer sp && RaceState.raceOf(sp).orElse(null) == Race.BLOODKIN;
 	}
 
 	private static long now(MinecraftServer server) {
-		return server.getTicks();
+		return server.getTickCount();
 	}
 
-	private static boolean ready(ServerPlayerEntity player, RaceData data, int slot) {
+	private static boolean ready(ServerPlayer player, RaceData data, int slot) {
 		return data.readyAt.getOrDefault(slot, 0L) <= now(player.getServer());
 	}
 
-	private static void cooldown(ServerPlayerEntity player, RaceData data, int slot, int ticks) {
+	private static void cooldown(ServerPlayer player, RaceData data, int slot, int ticks) {
 		data.readyAt.put(slot, now(player.getServer()) + ticks);
 		data.dirty = true;
 	}
 
 	/** Whether a creature has blood at all: not the undead, golems or armour stands. */
 	public static boolean bloodful(Entity entity) {
-		return entity instanceof LivingEntity living && !living.isUndead() && !(entity instanceof GolemEntity) && !(entity instanceof ArmorStandEntity);
+		return entity instanceof LivingEntity living && !living.isInvertedHealAndHarm() && !(entity instanceof AbstractGolem) && !(entity instanceof ArmorStand);
 	}
 
 	/** A living creature with blood to drink right now. */
 	/** A bat of some Bloodkin's swarm: part of a body, not prey, so heartbeat sense skips it. */
 	public static boolean swarmBat(Entity entity) {
-		return entity instanceof BatEntity && entity.isSilent();
+		return entity instanceof Bat && entity.isSilent();
 	}
 
 	public static boolean hasBlood(Entity entity) {
@@ -169,14 +169,14 @@ public final class Bloodkin {
 	 * An enemy for the Dash and the Harvest: a monster, or a mob hunting a player. Villagers, livestock, pets and
 	 * bonded beasts are never caught in them (a bite still drinks from anything with blood).
 	 */
-	private static boolean prey(Entity e, ServerPlayerEntity player) {
-		return e instanceof LivingEntity living && living.isAlive() && e != player && !(e instanceof PlayerEntity)
-				&& !(e instanceof TameableEntity tame && tame.isTamed()) && !e.getCommandTags().contains("mages_legacy_bond")
-				&& (e instanceof Monster || (e instanceof MobEntity m && m.getTarget() instanceof PlayerEntity));
+	private static boolean prey(Entity e, ServerPlayer player) {
+		return e instanceof LivingEntity living && living.isAlive() && e != player && !(e instanceof Player)
+				&& !(e instanceof TamableAnimal tame && tame.isTame()) && !e.getTags().contains("mages_legacy_bond")
+				&& (e instanceof Enemy || (e instanceof Mob m && m.getTarget() instanceof Player));
 	}
 
-	public static boolean isNight(ServerWorld world) {
-		return world.getDimension().hasSkyLight() && world.isNight();
+	public static boolean isNight(ServerLevel world) {
+		return world.dimensionType().hasSkyLight() && world.isNight();
 	}
 
 	public static boolean thirsty(RaceData data) {
@@ -187,11 +187,11 @@ public final class Bloodkin {
 	 * Blood drunk: into the resource, and every 10 drops of a monster's blood a point of race experience (a pen of
 	 * cows feeds the thirst, it doesn't teach).
 	 */
-	private static void drink(ServerPlayerEntity player, RaceData data, float blood) {
+	private static void drink(ServerPlayer player, RaceData data, float blood) {
 		drink(player, data, blood, true);
 	}
 
-	private static void drink(ServerPlayerEntity player, RaceData data, float blood, boolean teaches) {
+	private static void drink(ServerPlayer player, RaceData data, float blood, boolean teaches) {
 		if (blood <= 0) {
 			return;
 		}
@@ -199,9 +199,9 @@ public final class Bloodkin {
 		if (!teaches) {
 			return;
 		}
-		float total = DRUNK.getOrDefault(player.getUuid(), 0f) + blood;
+		float total = DRUNK.getOrDefault(player.getUUID(), 0f) + blood;
 		int xp = (int) (total / 10);
-		DRUNK.put(player.getUuid(), total - xp * 10);
+		DRUNK.put(player.getUUID(), total - xp * 10);
 		if (xp > 0) {
 			Progression.addXp(player, data, "bloodkin_drink", xp, 40);
 		}
@@ -209,29 +209,29 @@ public final class Bloodkin {
 
 	// ---- once a second ----
 
-	public static void tickSecond(ServerPlayerEntity player, RaceData data) {
-		ServerWorld world = player.getServerWorld();
+	public static void tickSecond(ServerPlayer player, RaceData data) {
+		ServerLevel world = player.serverLevel();
 		boolean night = isNight(world);
 		// Blood drains away by itself; Restraint slows it, Night Blood stops it at night
 		if (!(night && data.has(Talents.NIGHT_BLOOD))) {
 			data.addResource(data.has(Talents.THIRST_SLOW) ? -0.15f : -0.3f);
 		}
 		if (night && data.has(Talents.NIGHT_BLOOD)) {
-			refresh(player, StatusEffects.REGENERATION, 0, 60, 20);
+			refresh(player, MobEffects.REGENERATION, 0, 60, 20);
 		}
 		if (thirsty(data)) {
-			refresh(player, StatusEffects.SPEED, 0, 40, 20);
+			refresh(player, MobEffects.MOVEMENT_SPEED, 0, 40, 20);
 		}
-		if ((night || world.getLightLevel(BlockPos.ofFloored(player.getEyePos())) <= 7) && data.has(Talents.NIGHT_EYES)) {
-			refresh(player, StatusEffects.NIGHT_VISION, 0, 300, 220);
+		if ((night || world.getMaxLocalRawBrightness(BlockPos.containing(player.getEyePosition())) <= 7) && data.has(Talents.NIGHT_EYES)) {
+			refresh(player, MobEffects.NIGHT_VISION, 0, 300, 220);
 		}
 		if (night && (data.has(Talents.NIGHT_HUNTER) || data.has(Talents.NIGHT_PRINCE))) {
-			refresh(player, StatusEffects.SPEED, 0, 40, 20);
+			refresh(player, MobEffects.MOVEMENT_SPEED, 0, 40, 20);
 		}
 		// Quiet Step: at night monsters lose a Bloodkin they hunt from afar
 		if (night && data.has(Talents.NIGHT_HUSH)) {
-			for (MobEntity m : world.getEntitiesByClass(MobEntity.class, player.getBoundingBox().expand(24),
-					e -> e.getTarget() == player && e.squaredDistanceTo(player) > 64)) {
+			for (Mob m : world.getEntitiesOfClass(Mob.class, player.getBoundingBox().inflate(24),
+					e -> e.getTarget() == player && e.distanceToSqr(player) > 64)) {
 				m.setTarget(null);
 			}
 		}
@@ -239,10 +239,10 @@ public final class Bloodkin {
 	}
 
 	/** Whether a player stands in direct sunlight. */
-	public static boolean sunlit(PlayerEntity player) {
-		World world = player.getWorld();
-		return world.getDimension().hasSkyLight() && world.isDay() && !world.isRaining() && !player.isTouchingWaterOrRain()
-				&& world.isSkyVisible(BlockPos.ofFloored(player.getEyePos()));
+	public static boolean sunlit(Player player) {
+		Level world = player.level();
+		return world.dimensionType().hasSkyLight() && world.isDay() && !world.isRaining() && !player.isInWaterOrRain()
+				&& world.canSeeSky(BlockPos.containing(player.getEyePosition()));
 	}
 
 	/**
@@ -250,39 +250,39 @@ public final class Bloodkin {
 	 * a bare head burns as well (Shade halves it, Twilight Cloak turns it into mere weakness). Its healing stops in
 	 * the sun too (see {@link #naturalHealing}).
 	 */
-	private static void sun(ServerPlayerEntity player, RaceData data, ServerWorld world) {
+	private static void sun(ServerPlayer player, RaceData data, ServerLevel world) {
 		if (!sunlit(player)) {
 			return;
 		}
 		data.addResource(data.has(Talents.NIGHT_CLOAK) ? -0.15f : -0.3f);
-		if (!player.getEquippedStack(EquipmentSlot.HEAD).isEmpty()) {
+		if (!player.getItemBySlot(EquipmentSlot.HEAD).isEmpty()) {
 			return;
 		}
 		if (data.has(Talents.NIGHT_CLOAK)) {
-			refresh(player, StatusEffects.WEAKNESS, 0, 60, 30);
+			refresh(player, MobEffects.WEAKNESS, 0, 60, 30);
 			return;
 		}
-		if (data.has(Talents.NIGHT_SHADE) && world.getTime() / 20 % 2 == 0) {
+		if (data.has(Talents.NIGHT_SHADE) && world.getGameTime() / 20 % 2 == 0) {
 			return;
 		}
-		player.setOnFireFor(3);
+		player.setSecondsOnFire(3);
 	}
 
-	private static void refresh(ServerPlayerEntity player, StatusEffect effect, int amplifier, int duration, int below) {
-		StatusEffectInstance current = player.getStatusEffect(effect);
+	private static void refresh(ServerPlayer player, MobEffect effect, int amplifier, int duration, int below) {
+		MobEffectInstance current = player.getEffect(effect);
 		if (current == null || current.getAmplifier() < amplifier || current.getDuration() <= below) {
-			player.addStatusEffect(new StatusEffectInstance(effect, duration, amplifier, true, false, true));
+			player.addEffect(new MobEffectInstance(effect, duration, amplifier, true, false, true));
 		}
 	}
 
 	// ---- weaknesses ----
 
 	/** Natural healing stops while thirsty (unless On the Edge), and in direct sunlight (halved with Twilight Cloak). */
-	public static float naturalHealing(PlayerEntity player) {
+	public static float naturalHealing(Player player) {
 		if (!is(player)) {
 			return 1;
 		}
-		RaceData data = RaceState.of((ServerPlayerEntity) player);
+		RaceData data = RaceState.of((ServerPlayer) player);
 		if (thirsty(data) && !data.has(Talents.THIRST_EDGE)) {
 			return 0;
 		}
@@ -293,11 +293,11 @@ public final class Bloodkin {
 	}
 
 	/** Ordinary food feeds a Bloodkin only a third. */
-	public static void afterEating(ServerPlayerEntity player, FoodComponent food) {
-		int lost = food.getHunger() * 2 / 3;
-		player.getHungerManager().setFoodLevel(Math.max(0, player.getHungerManager().getFoodLevel() - lost));
-		player.getHungerManager().setSaturationLevel(Math.min(player.getHungerManager().getSaturationLevel(),
-				player.getHungerManager().getFoodLevel()) / 3);
+	public static void afterEating(ServerPlayer player, FoodProperties food) {
+		int lost = food.getNutrition() * 2 / 3;
+		player.getFoodData().setFoodLevel(Math.max(0, player.getFoodData().getFoodLevel() - lost));
+		player.getFoodData().setSaturation(Math.min(player.getFoodData().getSaturationLevel(),
+				player.getFoodData().getFoodLevel()) / 3);
 	}
 
 	// ---- blows ----
@@ -307,14 +307,14 @@ public final class Bloodkin {
 	 * from behind make it harder; then it heals (vampirism) and gives blood; with Torn Wound it bleeds.
 	 */
 	public static float onHit(LivingEntity victim, DamageSource source, float amount) {
-		if (!(source.getAttacker() instanceof ServerPlayerEntity player) || victim == player || !is(player) || amount <= 0) {
+		if (!(source.getEntity() instanceof ServerPlayer player) || victim == player || !is(player) || amount <= 0) {
 			return amount;
 		}
 		RaceData data = RaceState.of(player);
-		ServerWorld world = player.getServerWorld();
+		ServerLevel world = player.serverLevel();
 		long now = now(player.getServer());
 		// A real blow (a weapon, a fist, the Dash), not the Harvest's pull or a bleeding wound: only those drink
-		boolean melee = source.isOf(DamageTypes.PLAYER_ATTACK) && source.getSource() == player;
+		boolean melee = source.is(DamageTypes.PLAYER_ATTACK) && source.getDirectEntity() == player;
 		boolean night = isNight(world);
 		float bonus = 0;
 		if (thirsty(data)) {
@@ -328,15 +328,15 @@ public final class Bloodkin {
 		if (data.has(Talents.FANG_EXECUTE) && victim.getHealth() < victim.getMaxHealth() * 0.25f) {
 			bonus += 0.5f;
 		}
-		Long mark = MARKED.get(victim.getUuid());
+		Long mark = MARKED.get(victim.getUUID());
 		if (mark != null && mark > now) {
 			bonus += 0.25f;
 		}
 		// Ambush: a blow at a back that doesn't see you
 		if (melee && data.has(Talents.NIGHT_AMBUSH)) {
-			Vec3d facing = victim.getRotationVec(1.0f).multiply(1, 0, 1);
-			Vec3d toPlayer = player.getPos().subtract(victim.getPos()).multiply(1, 0, 1);
-			if (facing.lengthSquared() > 0 && toPlayer.lengthSquared() > 0 && facing.normalize().dotProduct(toPlayer.normalize()) < -0.3) {
+			Vec3 facing = victim.getViewVector(1.0f).multiply(1, 0, 1);
+			Vec3 toPlayer = player.position().subtract(victim.position()).multiply(1, 0, 1);
+			if (facing.lengthSqr() > 0 && toPlayer.lengthSqr() > 0 && facing.normalize().dot(toPlayer.normalize()) < -0.3) {
 				bonus += 0.3f;
 			}
 		}
@@ -345,26 +345,26 @@ public final class Bloodkin {
 			return amount;
 		}
 		float heal = 0;
-		if (data.has(Talents.FANG_BITE) && BLOWS.merge(player.getUuid(), 1, Integer::sum) >= 4) {
-			BLOWS.remove(player.getUuid());
+		if (data.has(Talents.FANG_BITE) && BLOWS.merge(player.getUUID(), 1, Integer::sum) >= 4) {
+			BLOWS.remove(player.getUUID());
 			amount += 4;
 			heal += 4;
-			world.playSound(null, victim.getBlockPos(), SoundEvents.ENTITY_PLAYER_ATTACK_CRIT, SoundCategory.PLAYERS, 1.0f, 0.6f);
+			world.playSound(null, victim.blockPosition(), SoundEvents.PLAYER_ATTACK_CRIT, SoundSource.PLAYERS, 1.0f, 0.6f);
 			splash(world, victim, 10);
 			// The Bite: two fangs' worth of cut, crossed
-			Vec3d center = victim.getPos().add(0, victim.getHeight() * 0.6, 0);
-			Fx.slash(world, center, player.getRotationVec(1.0f), 0.9f + victim.getWidth(), 55, 8, BLOOD_INK);
-			Fx.slash(world, center, player.getRotationVec(1.0f), 0.9f + victim.getWidth(), 125, 8, BLOOD_INK);
+			Vec3 center = victim.position().add(0, victim.getBbHeight() * 0.6, 0);
+			Fx.slash(world, center, player.getViewVector(1.0f), 0.9f + victim.getBbWidth(), 55, 8, BLOOD_INK);
+			Fx.slash(world, center, player.getViewVector(1.0f), 0.9f + victim.getBbWidth(), 125, 8, BLOOD_INK);
 			Fx.shake(player, 1.5f, 6);
 		}
 		heal += amount * lifesteal(player, data, now);
 		player.heal(heal);
-		Long feasting = FEAST.get(player.getUuid());
+		Long feasting = FEAST.get(player.getUUID());
 		if (feasting != null && feasting > now) {
 			// In the Feast every blow is drunk: a stream of blood from the wound straight into the Bloodkin
 			Fx.tendril(world, victim, player, 12, WINE_INK, BLOOD_INK);
 		}
-		drink(player, data, Math.min(amount, 8), victim instanceof Monster);
+		drink(player, data, Math.min(amount, 8), victim instanceof Enemy);
 		if (data.has(Talents.FANG_BLEED)) {
 			bleed(world, victim, player, data);
 		}
@@ -373,46 +373,46 @@ public final class Bloodkin {
 	}
 
 	/** The share of a blow that heals: 10%, 15% with the Greedy Fang, doubled after a Sacrifice, all of it in the Feast. */
-	private static float lifesteal(ServerPlayerEntity player, RaceData data, long now) {
-		Long feast = FEAST.get(player.getUuid());
+	private static float lifesteal(ServerPlayer player, RaceData data, long now) {
+		Long feast = FEAST.get(player.getUUID());
 		if (feast != null && feast > now) {
 			return 1.0f;
 		}
 		float rate = data.has(Talents.FANG_LEECH) ? 0.15f : 0.1f;
-		Long offering = OFFERING.get(player.getUuid());
+		Long offering = OFFERING.get(player.getUUID());
 		if (offering != null && offering > now) {
 			rate *= 2;
 		}
 		return rate;
 	}
 
-	private static void bleed(ServerWorld world, LivingEntity victim, ServerPlayerEntity owner, RaceData data) {
+	private static void bleed(ServerLevel world, LivingEntity victim, ServerPlayer owner, RaceData data) {
 		boolean deep = data.has(Talents.FANG_DEEP);
-		BLEEDING.put(victim.getUuid(), new Bleed(world, now(world.getServer()) + (deep ? 120 : 60), deep ? 2 : 1, owner.getUuid()));
+		BLEEDING.put(victim.getUUID(), new Bleed(world, now(world.getServer()) + (deep ? 120 : 60), deep ? 2 : 1, owner.getUUID()));
 		if (deep) {
-			victim.addStatusEffect(new StatusEffectInstance(StatusEffects.SLOWNESS, 60, 0));
+			victim.addEffect(new MobEffectInstance(MobEffects.MOVEMENT_SLOWDOWN, 60, 0));
 		}
 	}
 
 	/** Drops of blood off a creature. */
-	private static void splash(ServerWorld world, Entity e, int count) {
-		world.spawnParticles(ModParticles.BLOOD, e.getX(), e.getY() + e.getHeight() * 0.6, e.getZ(), count, e.getWidth() * 0.3, e.getHeight() * 0.2,
-				e.getWidth() * 0.3, 0.05);
+	private static void splash(ServerLevel world, Entity e, int count) {
+		world.sendParticles(ModParticles.BLOOD, e.getX(), e.getY() + e.getBbHeight() * 0.6, e.getZ(), count, e.getBbWidth() * 0.3, e.getBbHeight() * 0.2,
+				e.getBbWidth() * 0.3, 0.05);
 	}
 
 	/** A living creature died at a Bloodkin's hand: a little hunger stilled, and Frenzy, Rage and experience. */
-	public static void onKill(ServerPlayerEntity player, LivingEntity victim) {
+	public static void onKill(ServerPlayer player, LivingEntity victim) {
 		if (!is(player) || !bloodful(victim)) {
 			return;
 		}
 		RaceData data = RaceState.of(player);
-		player.getHungerManager().add(2, 0.2f);
+		player.getFoodData().eat(2, 0.2f);
 		if (data.has(Talents.FANG_FRENZY)) {
-			player.addStatusEffect(new StatusEffectInstance(StatusEffects.STRENGTH, 100, 0, true, true, true));
-			player.addStatusEffect(new StatusEffectInstance(StatusEffects.SPEED, 100, 0, true, true, true));
+			player.addEffect(new MobEffectInstance(MobEffects.DAMAGE_BOOST, 100, 0, true, true, true));
+			player.addEffect(new MobEffectInstance(MobEffects.MOVEMENT_SPEED, 100, 0, true, true, true));
 		}
 		// Thirst teaches through the hunt, not the slaughter of a chicken pen
-		if (thirsty(data) && victim instanceof Monster) {
+		if (thirsty(data) && victim instanceof Enemy) {
 			Progression.addXp(player, data, Progression.HUNT, 4, Progression.HUNT_CAP);
 			if (data.has(Talents.THIRST_RAGE)) {
 				data.addResource(15);
@@ -421,16 +421,16 @@ public final class Bloodkin {
 	}
 
 	/** The Prince of the Night: at night a killing blow scatters the Bloodkin into bats instead, once in 20 minutes. */
-	public static boolean allowDeath(ServerPlayerEntity player) {
+	public static boolean allowDeath(ServerPlayer player) {
 		RaceData data = RaceState.of(player);
-		if (data == null || data.race != Race.BLOODKIN || !data.has(Talents.NIGHT_PRINCE) || !isNight(player.getServerWorld())
+		if (data == null || data.race != Race.BLOODKIN || !data.has(Talents.NIGHT_PRINCE) || !isNight(player.serverLevel())
 				|| !ready(player, data, PRINCE_SLOT)) {
 			return true;
 		}
 		player.setHealth(player.getMaxHealth() * 0.3f);
 		cooldown(player, data, PRINCE_SLOT, LONG_COOLDOWN);
 		startSwarm(player, data);
-		player.sendMessage(Text.translatable("mages_legacy.bloodkin.prince").formatted(Formatting.DARK_RED), false);
+		player.displayClientMessage(Component.translatable("mages_legacy.bloodkin.prince").withStyle(ChatFormatting.DARK_RED), false);
 		return false;
 	}
 
@@ -446,7 +446,7 @@ public final class Bloodkin {
 
 	// ---- abilities ----
 
-	public static AbilityResult use(ServerPlayerEntity player, RaceData data, int slot) {
+	public static AbilityResult use(ServerPlayer player, RaceData data, int slot) {
 		return switch (slot) {
 			case 0 -> dash(player, data);
 			case 1 -> harvest(player, data);
@@ -469,12 +469,12 @@ public final class Bloodkin {
 	 * Blood Dash: a rush of 10 blocks along your look, stopped only by walls, through everything in the way: each one hit takes 6
 	 * and bleeds. With Double Rush a second dash follows free within 3 seconds.
 	 */
-	public static AbilityResult dash(ServerPlayerEntity player, RaceData data) {
+	public static AbilityResult dash(ServerPlayer player, RaceData data) {
 		if (DASHES.stream().anyMatch(d -> d.player() == player)) {
 			return AbilityResult.HINTED;
 		}
 		long now = now(player.getServer());
-		Long free = DOUBLE.remove(player.getUuid());
+		Long free = DOUBLE.remove(player.getUUID());
 		boolean second = free != null && free >= now;
 		if (!second && !ready(player, data, 0)) {
 			return AbilityResult.COOLDOWN;
@@ -482,7 +482,7 @@ public final class Bloodkin {
 		if (!second && data.resource < DASH_COST) {
 			return AbilityResult.NO_RESOURCE;
 		}
-		List<Vec3d> path = dashPath(player, dashRange(data));
+		List<Vec3> path = dashPath(player, dashRange(data));
 		if (path.size() < 2) {
 			return AbilityResult.NO_SPACE;
 		}
@@ -492,41 +492,41 @@ public final class Bloodkin {
 		}
 		player.stopRiding();
 		DASHES.add(new Dash(player, path, new HashSet<>(), second));
-		DASH_STEP.put(player.getUuid(), 0);
-		ServerWorld world = player.getServerWorld();
+		DASH_STEP.put(player.getUUID(), 0);
+		ServerLevel world = player.serverLevel();
 		Fx.flight(player, DASH_TICKS);
 		Fx.ribbon(world, path, 20, WINE_INK, BLOOD_INK, 0.9f);
 		// Blood shades of the body left along the way, and the view rushing wide
-		Fx.ghosts(world, path, player.getYaw(), 4, 16, BLOOD_INK);
+		Fx.ghosts(world, path, player.getYRot(), 4, 16, BLOOD_INK);
 		Fx.fov(player, 0.22f, 12);
 		Fx.shake(player, 0.8f, 5);
-		world.spawnParticles(ModParticles.BLOOD_MIST, player.getX(), player.getY() + 0.9, player.getZ(), 8, 0.3, 0.5, 0.3, 0.02);
-		world.playSound(null, player.getBlockPos(), SoundEvents.ENTITY_PHANTOM_FLAP, SoundCategory.PLAYERS, 1.0f, 0.6f);
-		world.playSound(null, player.getBlockPos(), SoundEvents.ITEM_TRIDENT_RIPTIDE_1, SoundCategory.PLAYERS, 0.8f, 1.4f);
+		world.sendParticles(ModParticles.BLOOD_MIST, player.getX(), player.getY() + 0.9, player.getZ(), 8, 0.3, 0.5, 0.3, 0.02);
+		world.playSound(null, player.blockPosition(), SoundEvents.PHANTOM_FLAP, SoundSource.PLAYERS, 1.0f, 0.6f);
+		world.playSound(null, player.blockPosition(), SoundEvents.TRIDENT_RIPTIDE_1, SoundSource.PLAYERS, 0.8f, 1.4f);
 		return AbilityResult.OK;
 	}
 
 	/** Points along the look, a quarter block apart, as far as the body fits. */
-	private static List<Vec3d> dashPath(ServerPlayerEntity player, double range) {
-		List<Vec3d> path = new ArrayList<>();
-		Vec3d look = player.getRotationVec(1.0f);
+	private static List<Vec3> dashPath(ServerPlayer player, double range) {
+		List<Vec3> path = new ArrayList<>();
+		Vec3 look = player.getViewVector(1.0f);
 		// Looking about level the dash runs along the ground; only a clear look up or down makes it climb or dive
 		double rise = Math.abs(look.y) < 0.5 ? 0 : Math.max(-0.5, Math.min(0.5, look.y));
-		Vec3d dir = new Vec3d(look.x, rise, look.z);
-		if (dir.lengthSquared() < 1.0E-4) {
+		Vec3 dir = new Vec3(look.x, rise, look.z);
+		if (dir.lengthSqr() < 1.0E-4) {
 			return path;
 		}
 		dir = dir.normalize();
-		Vec3d start = player.getPos();
+		Vec3 start = player.position();
 		path.add(start);
-		Vec3d at = start;
-		ServerWorld world = player.getServerWorld();
+		Vec3 at = start;
+		ServerLevel world = player.serverLevel();
 		for (double d = 0.25; d <= range; d += 0.25) {
-			Vec3d next = at.add(dir.multiply(0.25));
-			if (!world.isSpaceEmpty(player, player.getBoundingBox().offset(next.subtract(player.getPos())))) {
+			Vec3 next = at.add(dir.scale(0.25));
+			if (!world.noCollision(player, player.getBoundingBox().move(next.subtract(player.position())))) {
 				// Up a step, as walking would
-				Vec3d stepped = next.add(0, 0.6, 0);
-				if (!world.isSpaceEmpty(player, player.getBoundingBox().offset(stepped.subtract(player.getPos())))) {
+				Vec3 stepped = next.add(0, 0.6, 0);
+				if (!world.noCollision(player, player.getBoundingBox().move(stepped.subtract(player.position())))) {
 					break;
 				}
 				next = stepped;
@@ -540,35 +540,35 @@ public final class Bloodkin {
 	private static void tickDashes(long now) {
 		for (Iterator<Dash> it = DASHES.iterator(); it.hasNext(); ) {
 			Dash d = it.next();
-			ServerPlayerEntity player = d.player();
+			ServerPlayer player = d.player();
 			if (player.isRemoved() || !player.isAlive()) {
 				it.remove();
 				continue;
 			}
-			ServerWorld world = player.getServerWorld();
+			ServerLevel world = player.serverLevel();
 			RaceData data = RaceState.of(player);
-			int step = DASH_STEP.merge(player.getUuid(), 1, Integer::sum);
+			int step = DASH_STEP.merge(player.getUUID(), 1, Integer::sum);
 			int last = d.path().size() - 1;
 			int from = Math.min(last, Math.round((float) (step - 1) * last / DASH_TICKS));
 			int to = Math.min(last, Math.round((float) step * last / DASH_TICKS));
-			Vec3d a = d.path().get(from);
-			Vec3d b = d.path().get(to);
+			Vec3 a = d.path().get(from);
+			Vec3 b = d.path().get(to);
 			// Everything the body sweeps through on this stretch is cut
-			Box swept = player.getBoundingBox().offset(a.subtract(player.getPos())).union(player.getBoundingBox().offset(b.subtract(player.getPos())))
-					.expand(0.4);
-			for (LivingEntity e : world.getEntitiesByClass(LivingEntity.class, swept, e -> prey(e, player) && !d.hit().contains(e.getUuid()))) {
-				d.hit().add(e.getUuid());
-				e.damage(world.getDamageSources().playerAttack(player), 6);
-				Vec3d along = b.subtract(a);
-				Fx.slash(world, e.getPos().add(0, e.getHeight() * 0.55, 0), along, 1.1f + e.getWidth(), 20 + world.getRandom().nextFloat() * 40, 9, BLOOD_INK);
+			AABB swept = player.getBoundingBox().move(a.subtract(player.position())).minmax(player.getBoundingBox().move(b.subtract(player.position())))
+					.inflate(0.4);
+			for (LivingEntity e : world.getEntitiesOfClass(LivingEntity.class, swept, e -> prey(e, player) && !d.hit().contains(e.getUUID()))) {
+				d.hit().add(e.getUUID());
+				e.hurt(world.damageSources().playerAttack(player), 6);
+				Vec3 along = b.subtract(a);
+				Fx.slash(world, e.position().add(0, e.getBbHeight() * 0.55, 0), along, 1.1f + e.getBbWidth(), 20 + world.getRandom().nextFloat() * 40, 9, BLOOD_INK);
 				Fx.shake(player, 2.2f, 7);
 				if (hasBlood(e)) {
 					bleed(world, e, player, data);
 					splash(world, e, 12);
 					// Blood thrown on along the cut
-					Vec3d spray = along.lengthSquared() > 1.0E-6 ? along.normalize() : Vec3d.ZERO;
+					Vec3 spray = along.lengthSqr() > 1.0E-6 ? along.normalize() : Vec3.ZERO;
 					for (int k = 0; k < 10; k++) {
-						world.spawnParticles(ModParticles.BLOOD, e.getX(), e.getY() + e.getHeight() * 0.6, e.getZ(), 0,
+						world.sendParticles(ModParticles.BLOOD, e.getX(), e.getY() + e.getBbHeight() * 0.6, e.getZ(), 0,
 								spray.x * 0.35 + (world.getRandom().nextDouble() - 0.5) * 0.2, 0.15 + world.getRandom().nextDouble() * 0.15,
 								spray.z * 0.35 + (world.getRandom().nextDouble() - 0.5) * 0.2, 1);
 					}
@@ -579,20 +579,20 @@ public final class Bloodkin {
 				}
 			}
 			for (int i = 0; i <= 4; i++) {
-				Vec3d p = a.lerp(b, i / 4.0);
-				world.spawnParticles(ModParticles.BLOOD, p.x, p.y + 1, p.z, 2, 0.2, 0.4, 0.2, 0.02);
+				Vec3 p = a.lerp(b, i / 4.0);
+				world.sendParticles(ModParticles.BLOOD, p.x, p.y + 1, p.z, 2, 0.2, 0.4, 0.2, 0.02);
 			}
-			player.setVelocity(Vec3d.ZERO);
+			player.setDeltaMovement(Vec3.ZERO);
 			player.fallDistance = 0;
-			player.networkHandler.requestTeleport(b.x, b.y, b.z, player.getYaw(), player.getPitch());
+			player.connection.teleport(b.x, b.y, b.z, player.getYRot(), player.getXRot());
 			if (to >= last) {
 				it.remove();
-				DASH_STEP.remove(player.getUuid());
+				DASH_STEP.remove(player.getUUID());
 				if (data.has(Talents.FANG_DOUBLE) && !d.free()) {
-					DOUBLE.put(player.getUuid(), now + DOUBLE_WINDOW);
+					DOUBLE.put(player.getUUID(), now + DOUBLE_WINDOW);
 				}
-				world.spawnParticles(ModParticles.BLOOD, b.x, b.y + 0.5, b.z, 16, 0.4, 0.3, 0.4, 0.1);
-				world.spawnParticles(ModParticles.BLOOD_MIST, b.x, b.y + 0.8, b.z, 10, 0.4, 0.4, 0.4, 0.04);
+				world.sendParticles(ModParticles.BLOOD, b.x, b.y + 0.5, b.z, 16, 0.4, 0.3, 0.4, 0.1);
+				world.sendParticles(ModParticles.BLOOD_MIST, b.x, b.y + 0.8, b.z, 10, 0.4, 0.4, 0.4, 0.04);
 				Fx.burst(world, b.add(0, 1, 0), 1.1f, 6, BLOOD_INK);
 				Fx.ring(world, b, 0.3f, 2.2f, 10, BLOOD_INK);
 			}
@@ -607,7 +607,7 @@ public final class Bloodkin {
 	 * Harvest: blood is drawn out of every enemy within 9 blocks: each takes 4, and you heal 2 (4 with Greedy Harvest) and drink 5
 	 * from each. Mark of the Harvest leaves them taking more from you; the Blood Storm crown pulls twice more.
 	 */
-	public static AbilityResult harvest(ServerPlayerEntity player, RaceData data) {
+	public static AbilityResult harvest(ServerPlayer player, RaceData data) {
 		if (!ready(player, data, 1)) {
 			return AbilityResult.COOLDOWN;
 		}
@@ -619,64 +619,64 @@ public final class Bloodkin {
 		pull(player, data);
 		if (data.has(Talents.THIRST_STORM)) {
 			long now = now(player.getServer());
-			STORM.put(player.getUuid(), new ArrayList<>(List.of(now + 20, now + 40)));
+			STORM.put(player.getUUID(), new ArrayList<>(List.of(now + 20, now + 40)));
 		}
 		return AbilityResult.OK;
 	}
 
 	/** One pull of the Harvest. */
-	private static void pull(ServerPlayerEntity player, RaceData data) {
-		ServerWorld world = player.getServerWorld();
+	private static void pull(ServerPlayer player, RaceData data) {
+		ServerLevel world = player.serverLevel();
 		double radius = harvestRadius(data);
 		long now = now(player.getServer());
 		int drawn = 0;
-		for (LivingEntity e : world.getEntitiesByClass(LivingEntity.class, player.getBoundingBox().expand(radius),
-				e -> prey(e, player) && hasBlood(e) && e.squaredDistanceTo(player) < radius * radius)) {
-			e.damage(world.getDamageSources().indirectMagic(player, player), 4);
+		for (LivingEntity e : world.getEntitiesOfClass(LivingEntity.class, player.getBoundingBox().inflate(radius),
+				e -> prey(e, player) && hasBlood(e) && e.distanceToSqr(player) < radius * radius)) {
+			e.hurt(world.damageSources().indirectMagic(player, player), 4);
 			player.heal(data.has(Talents.THIRST_DRAIN) ? 4 : 2);
 			drink(player, data, 5);
 			if (data.has(Talents.THIRST_MARK)) {
-				MARKED.put(e.getUuid(), now + MARK_TICKS);
+				MARKED.put(e.getUUID(), now + MARK_TICKS);
 			}
 			// A stream of blood from the victim to the Bloodkin: a living tendril, and drops carried along it
 			Fx.tendril(world, e, player, 20, WINE_INK, BLOOD_INK);
 			// The tendril yanks the victim a couple of blocks towards the Bloodkin
-			Vec3d yank = player.getPos().subtract(e.getPos());
-			if (yank.lengthSquared() > 4) {
-				e.setVelocity(yank.normalize().multiply(0.55).add(0, 0.2, 0));
-				e.velocityModified = true;
+			Vec3 yank = player.position().subtract(e.position());
+			if (yank.lengthSqr() > 4) {
+				e.setDeltaMovement(yank.normalize().scale(0.55).add(0, 0.2, 0));
+				e.hurtMarked = true;
 			}
-			Fx.pillar(world, e.getPos(), 0.35f + e.getWidth() * 0.4f, e.getHeight() + 0.8f, 10, BLOOD_INK);
+			Fx.pillar(world, e.position(), 0.35f + e.getBbWidth() * 0.4f, e.getBbHeight() + 0.8f, 10, BLOOD_INK);
 			splash(world, e, 8);
-			Vec3d from = e.getPos().add(0, e.getHeight() * 0.6, 0);
-			Vec3d way = player.getPos().add(0, 1, 0).subtract(from);
+			Vec3 from = e.position().add(0, e.getBbHeight() * 0.6, 0);
+			Vec3 way = player.position().add(0, 1, 0).subtract(from);
 			for (int i = 0; i < 10; i++) {
-				Vec3d at = from.add(way.multiply(i / 10.0 * 0.3));
-				Vec3d push = way.multiply(0.07 + world.getRandom().nextDouble() * 0.015);
-				world.spawnParticles(ModParticles.BLOOD_MOTE, at.x, at.y, at.z, 0, push.x, push.y, push.z, 1);
+				Vec3 at = from.add(way.scale(i / 10.0 * 0.3));
+				Vec3 push = way.scale(0.07 + world.getRandom().nextDouble() * 0.015);
+				world.sendParticles(ModParticles.BLOOD_MOTE, at.x, at.y, at.z, 0, push.x, push.y, push.z, 1);
 			}
 			Progression.addXp(player, data, "bloodkin_harvest", 2, 30);
 			drawn++;
 		}
 		// The circle closes in on the Bloodkin, a seal of blood opening under its feet
-		Fx.ring(world, player.getPos(), (float) radius, 0.5f, 14, BLOOD_INK);
-		Fx.mark(world, player.getPos(), null, (float) radius * 0.5f, 30, POOL_INK, Fx.POOL);
+		Fx.ring(world, player.position(), (float) radius, 0.5f, 14, BLOOD_INK);
+		Fx.mark(world, player.position(), null, (float) radius * 0.5f, 30, POOL_INK, Fx.POOL);
 		Fx.pulse(player, 2, 30, HEART_RGB);
-		world.playSound(null, player.getBlockPos(), SoundEvents.ENTITY_WARDEN_HEARTBEAT, SoundCategory.PLAYERS, 1.5f, 0.8f);
+		world.playSound(null, player.blockPosition(), SoundEvents.WARDEN_HEARTBEAT, SoundSource.PLAYERS, 1.5f, 0.8f);
 		if (drawn > 0) {
 			Fx.shake(player, 1.0f, 10);
-			world.playSound(null, player.getBlockPos(), SoundEvents.ENTITY_GENERIC_DRINK, SoundCategory.PLAYERS, 1.0f, 0.6f);
+			world.playSound(null, player.blockPosition(), SoundEvents.GENERIC_DRINK, SoundSource.PLAYERS, 1.0f, 0.6f);
 		}
 	}
 
 	/** Blood Sacrifice: your own health for blood at once. It never kills. Offering of Blood doubles vampirism after. */
-	public static AbilityResult sacrifice(ServerPlayerEntity player, RaceData data) {
+	public static AbilityResult sacrifice(ServerPlayer player, RaceData data) {
 		if (!ready(player, data, 2)) {
 			return AbilityResult.COOLDOWN;
 		}
 		float price = data.has(Talents.THIRST_SACRIFICE) ? 2 : 4;
 		if (player.getHealth() <= price + 1) {
-			player.sendMessage(Text.translatable("mages_legacy.bloodkin.too_weak"), true);
+			player.displayClientMessage(Component.translatable("mages_legacy.bloodkin.too_weak"), true);
 			return AbilityResult.HINTED;
 		}
 		boolean vessel = data.has(Talents.THIRST_VESSEL);
@@ -684,34 +684,34 @@ public final class Bloodkin {
 		data.addResource(vessel ? 50 : 40);
 		cooldown(player, data, 2, vessel ? SACRIFICE_COOLDOWN / 2 : SACRIFICE_COOLDOWN);
 		if (data.has(Talents.THIRST_OFFERING)) {
-			OFFERING.put(player.getUuid(), now(player.getServer()) + OFFERING_TICKS);
+			OFFERING.put(player.getUUID(), now(player.getServer()) + OFFERING_TICKS);
 		}
-		ServerWorld world = player.getServerWorld();
+		ServerLevel world = player.serverLevel();
 		splash(world, player, 20);
 		// Blood wrung out of the body winds up around it and is drunk back in
 		Fx.helix(world, player, 1.1f, 2.4f, 3, true, 22, BLOOD_INK);
-		Fx.mark(world, player.getPos(), null, 1.5f, 26, POOL_INK, Fx.POOL);
+		Fx.mark(world, player.position(), null, 1.5f, 26, POOL_INK, Fx.POOL);
 		Fx.screen(player, 14, BLOOD_RGB);
 		Fx.pulse(player, 1, 18, HEART_RGB);
 		Fx.shake(player, 1.6f, 8);
-		Fx.ring(world, player.getPos(), 0.3f, 2.5f, 12, WINE_INK);
-		world.playSound(null, player.getBlockPos(), SoundEvents.ENTITY_PLAYER_HURT_SWEET_BERRY_BUSH, SoundCategory.PLAYERS, 1.0f, 0.6f);
-		world.playSound(null, player.getBlockPos(), SoundEvents.BLOCK_BREWING_STAND_BREW, SoundCategory.PLAYERS, 0.8f, 0.5f);
+		Fx.ring(world, player.position(), 0.3f, 2.5f, 12, WINE_INK);
+		world.playSound(null, player.blockPosition(), SoundEvents.PLAYER_HURT_SWEET_BERRY_BUSH, SoundSource.PLAYERS, 1.0f, 0.6f);
+		world.playSound(null, player.blockPosition(), SoundEvents.BREWING_STAND_BREW, SoundSource.PLAYERS, 0.8f, 0.5f);
 		return AbilityResult.OK;
 	}
 
 	/** A friend in sight within {@code range}: another player, or a tamed or bonded creature. */
-	private static LivingEntity lookedAtFriend(ServerPlayerEntity player, double range) {
-		Vec3d eye = player.getEyePos();
-		Vec3d look = player.getRotationVec(1.0f);
-		net.minecraft.util.hit.BlockHitResult wall = player.getWorld().raycast(new net.minecraft.world.RaycastContext(eye, eye.add(look.multiply(range)),
-				net.minecraft.world.RaycastContext.ShapeType.COLLIDER, net.minecraft.world.RaycastContext.FluidHandling.NONE, player));
-		double reach = wall.getType() == net.minecraft.util.hit.HitResult.Type.MISS ? range : wall.getPos().distanceTo(eye);
-		Vec3d end = eye.add(look.multiply(reach));
-		Box box = player.getBoundingBox().stretch(look.multiply(reach)).expand(1);
-		net.minecraft.util.hit.EntityHitResult hit = net.minecraft.entity.projectile.ProjectileUtil.raycast(player, eye, end, box,
-				e -> e instanceof LivingEntity l && l.isAlive() && e != player && !(e instanceof Monster) && (e instanceof PlayerEntity p && !p.isSpectator()
-						|| e instanceof TameableEntity t && t.isTamed() || euf.mageslegacy.shepherd.Creatures.ownerOf(e) != null), reach * reach);
+	private static LivingEntity lookedAtFriend(ServerPlayer player, double range) {
+		Vec3 eye = player.getEyePosition();
+		Vec3 look = player.getViewVector(1.0f);
+		net.minecraft.world.phys.BlockHitResult wall = player.level().clip(new net.minecraft.world.level.ClipContext(eye, eye.add(look.scale(range)),
+				net.minecraft.world.level.ClipContext.Block.COLLIDER, net.minecraft.world.level.ClipContext.Fluid.NONE, player));
+		double reach = wall.getType() == net.minecraft.world.phys.HitResult.Type.MISS ? range : wall.getLocation().distanceTo(eye);
+		Vec3 end = eye.add(look.scale(reach));
+		AABB box = player.getBoundingBox().expandTowards(look.scale(reach)).inflate(1);
+		net.minecraft.world.phys.EntityHitResult hit = net.minecraft.world.entity.projectile.ProjectileUtil.getEntityHitResult(player, eye, end, box,
+				e -> e instanceof LivingEntity l && l.isAlive() && e != player && !(e instanceof Enemy) && (e instanceof Player p && !p.isSpectator()
+						|| e instanceof TamableAnimal t && t.isTame() || euf.mageslegacy.shepherd.Creatures.ownerOf(e) != null), reach * reach);
 		return hit != null && hit.getEntity() instanceof LivingEntity living ? living : null;
 	}
 
@@ -719,7 +719,7 @@ public final class Bloodkin {
 	 * Blood Transfusion (Z, looking at a friend): the Bloodkin's blood into a friend's veins: 25 blood and 2 of its
 	 * own health for 6 health, Regeneration and, for a player, Strength for 8 seconds. Once in 10 seconds.
 	 */
-	public static AbilityResult transfuse(ServerPlayerEntity player, RaceData data, LivingEntity friend) {
+	public static AbilityResult transfuse(ServerPlayer player, RaceData data, LivingEntity friend) {
 		if (!ready(player, data, TRANSFUSE_SLOT)) {
 			return AbilityResult.COOLDOWN;
 		}
@@ -727,33 +727,33 @@ public final class Bloodkin {
 			return AbilityResult.NO_RESOURCE;
 		}
 		if (player.getHealth() <= 3) {
-			player.sendMessage(Text.translatable("mages_legacy.bloodkin.too_weak"), true);
+			player.displayClientMessage(Component.translatable("mages_legacy.bloodkin.too_weak"), true);
 			return AbilityResult.HINTED;
 		}
 		data.addResource(-TRANSFUSE_COST);
 		cooldown(player, data, TRANSFUSE_SLOT, TRANSFUSE_COOLDOWN);
 		player.setHealth(player.getHealth() - 2);
 		friend.heal(6);
-		friend.addStatusEffect(new StatusEffectInstance(StatusEffects.REGENERATION, 100, 0, true, true, true));
-		if (friend instanceof PlayerEntity) {
-			friend.addStatusEffect(new StatusEffectInstance(StatusEffects.STRENGTH, 160, 0, true, true, true));
+		friend.addEffect(new MobEffectInstance(MobEffects.REGENERATION, 100, 0, true, true, true));
+		if (friend instanceof Player) {
+			friend.addEffect(new MobEffectInstance(MobEffects.DAMAGE_BOOST, 160, 0, true, true, true));
 		}
-		ServerWorld world = player.getServerWorld();
+		ServerLevel world = player.serverLevel();
 		// A stream of blood from vein to vein, and it winds into the friend
 		Fx.tendril(world, player, friend, 18, WINE_INK, BLOOD_INK);
-		Fx.helix(world, friend, friend.getWidth() + 0.6f, friend.getHeight() + 0.4f, 3, true, 20, BLOOD_INK);
-		Fx.burst(world, friend.getPos().add(0, friend.getHeight() / 2, 0), 1.2f + friend.getWidth(), 7, BLOOD_INK);
+		Fx.helix(world, friend, friend.getBbWidth() + 0.6f, friend.getBbHeight() + 0.4f, 3, true, 20, BLOOD_INK);
+		Fx.burst(world, friend.position().add(0, friend.getBbHeight() / 2, 0), 1.2f + friend.getBbWidth(), 7, BLOOD_INK);
 		Fx.pulse(player, 1, 18, HEART_RGB);
-		world.spawnParticles(net.minecraft.particle.ParticleTypes.HEART, friend.getX(), friend.getY() + friend.getHeight() + 0.2, friend.getZ(), 4, 0.3, 0.2,
+		world.sendParticles(net.minecraft.core.particles.ParticleTypes.HEART, friend.getX(), friend.getY() + friend.getBbHeight() + 0.2, friend.getZ(), 4, 0.3, 0.2,
 				0.3, 0);
-		world.playSound(null, friend.getBlockPos(), SoundEvents.ENTITY_GENERIC_DRINK, SoundCategory.PLAYERS, 1.0f, 1.2f);
-		world.playSound(null, friend.getBlockPos(), SoundEvents.ENTITY_WARDEN_HEARTBEAT, SoundCategory.PLAYERS, 1.0f, 1.2f);
+		world.playSound(null, friend.blockPosition(), SoundEvents.GENERIC_DRINK, SoundSource.PLAYERS, 1.0f, 1.2f);
+		world.playSound(null, friend.blockPosition(), SoundEvents.WARDEN_HEARTBEAT, SoundSource.PLAYERS, 1.0f, 1.2f);
 		Progression.addXp(player, data, "bloodkin_transfuse", 3, 15);
 		return AbilityResult.OK;
 	}
 
 	/** The Feast crown (H): for 8 seconds every blow heals in full. Once in 5 minutes. */
-	public static AbilityResult feast(ServerPlayerEntity player, RaceData data) {
+	public static AbilityResult feast(ServerPlayer player, RaceData data) {
 		if (!ready(player, data, FEAST_SLOT)) {
 			return AbilityResult.COOLDOWN;
 		}
@@ -762,18 +762,18 @@ public final class Bloodkin {
 		}
 		data.addResource(-FEAST_COST);
 		cooldown(player, data, FEAST_SLOT, FEAST_COOLDOWN);
-		FEAST.put(player.getUuid(), now(player.getServer()) + FEAST_TICKS);
-		ServerWorld world = player.getServerWorld();
+		FEAST.put(player.getUUID(), now(player.getServer()) + FEAST_TICKS);
+		ServerLevel world = player.serverLevel();
 		// A crown of blood: it erupts around the Bloodkin, a seal burns under it and embers rise off it all the Feast long
 		Fx.screen(player, 24, BLOOD_RGB);
 		Fx.pulse(player, FEAST_TICKS / 20, FEAST_TICKS, HEART_RGB);
 		Fx.aura(world, player, FEAST_TICKS, BLOOD_INK, Fx.EMBERS);
-		Fx.mark(world, player.getPos(), null, 2.4f, FEAST_TICKS, POOL_INK, Fx.POOL);
+		Fx.mark(world, player.position(), null, 2.4f, FEAST_TICKS, POOL_INK, Fx.POOL);
 		Fx.helix(world, player, 1.3f, 3.0f, 4, false, 26, BLOOD_INK);
-		Fx.burst(world, player.getPos().add(0, 1, 0), 3.0f, 8, BLOOD_INK);
+		Fx.burst(world, player.position().add(0, 1, 0), 3.0f, 8, BLOOD_INK);
 		Fx.shake(player, 2.5f, 12);
-		Fx.ring(world, player.getPos(), 0.5f, 6, 16, BLOOD_INK);
-		world.playSound(null, player.getBlockPos(), SoundEvents.ENTITY_WITHER_SPAWN, SoundCategory.PLAYERS, 0.4f, 1.8f);
+		Fx.ring(world, player.position(), 0.5f, 6, 16, BLOOD_INK);
+		world.playSound(null, player.blockPosition(), SoundEvents.WITHER_SPAWN, SoundSource.PLAYERS, 0.4f, 1.8f);
 		return AbilityResult.OK;
 	}
 
@@ -781,7 +781,7 @@ public final class Bloodkin {
 	 * Bat Swarm (Alt): the Bloodkin scatters into bats for 3 seconds, flying where it looks, untouchable;
 	 * with the Biting Swarm whatever it flies through bleeds.
 	 */
-	public static AbilityResult swarm(ServerPlayerEntity player, RaceData data) {
+	public static AbilityResult swarm(ServerPlayer player, RaceData data) {
 		if (!ready(player, data, SWARM_SLOT)) {
 			return AbilityResult.COOLDOWN;
 		}
@@ -794,77 +794,77 @@ public final class Bloodkin {
 		return AbilityResult.OK;
 	}
 
-	private static void startSwarm(ServerPlayerEntity player, RaceData data) {
+	private static void startSwarm(ServerPlayer player, RaceData data) {
 		int ticks = data.has(Talents.NIGHT_BATS) ? SWARM_TICKS_LONG : SWARM_TICKS;
-		ServerWorld world = player.getServerWorld();
-		List<BatEntity> bats = new ArrayList<>();
+		ServerLevel world = player.serverLevel();
+		List<Bat> bats = new ArrayList<>();
 		for (int i = 0; i < 7; i++) {
-			BatEntity bat = EntityType.BAT.create(world);
+			Bat bat = EntityType.BAT.create(world);
 			if (bat == null) {
 				continue;
 			}
 			// Burst out onto the ring at once, not out of the Bloodkin's own face
 			double a = Math.PI * 2 * i / 7;
-			bat.refreshPositionAndAngles(player.getX() + Math.cos(a) * 1.6, player.getY() + 0.4 + world.getRandom().nextDouble(),
+			bat.moveTo(player.getX() + Math.cos(a) * 1.6, player.getY() + 0.4 + world.getRandom().nextDouble(),
 					player.getZ() + Math.sin(a) * 1.6, world.getRandom().nextFloat() * 360, 0);
 			bat.setInvulnerable(true);
-			bat.addCommandTag("mages_legacy_swarm");
+			bat.addTag("mages_legacy_swarm");
 			// Silence is synced, so clients can tell the swarm from wild bats (see swarmBat)
 			bat.setSilent(true);
-			world.spawnEntity(bat);
+			world.addFreshEntity(bat);
 			bats.add(bat);
 		}
 		SWARMS.add(new Swarm(player, now(player.getServer()) + ticks, bats));
-		player.addStatusEffect(new StatusEffectInstance(StatusEffects.INVISIBILITY, ticks + 4, 0, true, false, false));
+		player.addEffect(new MobEffectInstance(MobEffects.INVISIBILITY, ticks + 4, 0, true, false, false));
 		// The body bursts into a cloud of bats: a flash of dark blood, bats flung out, and a flock that circles it
 		Fx.swarm(world, player, 26, ticks);
-		Fx.burst(world, player.getPos().add(0, 1, 0), 2.4f, 8, WINE_INK);
-		Fx.ring(world, player.getPos(), 0.4f, 3.5f, 12, BLOOD_INK);
+		Fx.burst(world, player.position().add(0, 1, 0), 2.4f, 8, WINE_INK);
+		Fx.ring(world, player.position(), 0.4f, 3.5f, 12, BLOOD_INK);
 		Fx.fov(player, 0.16f, ticks);
 		Fx.shake(player, 1.6f, 8);
-		world.spawnParticles(ModParticles.BLOOD_MIST, player.getX(), player.getY() + 1, player.getZ(), 24, 0.5, 0.7, 0.5, 0.06);
-		world.spawnParticles(ModParticles.BAT, player.getX(), player.getY() + 1.1, player.getZ(), 16, 0.3, 0.4, 0.3, 0.35);
-		world.playSound(null, player.getBlockPos(), SoundEvents.ENTITY_BAT_TAKEOFF, SoundCategory.PLAYERS, 1.2f, 0.8f);
+		world.sendParticles(ModParticles.BLOOD_MIST, player.getX(), player.getY() + 1, player.getZ(), 24, 0.5, 0.7, 0.5, 0.06);
+		world.sendParticles(ModParticles.BAT, player.getX(), player.getY() + 1.1, player.getZ(), 16, 0.3, 0.4, 0.3, 0.35);
+		world.playSound(null, player.blockPosition(), SoundEvents.BAT_TAKEOFF, SoundSource.PLAYERS, 1.2f, 0.8f);
 	}
 
 	private static void tickSwarms(long now) {
 		for (Iterator<Swarm> it = SWARMS.iterator(); it.hasNext(); ) {
 			Swarm s = it.next();
-			ServerPlayerEntity player = s.player();
+			ServerPlayer player = s.player();
 			if (player.isRemoved() || !player.isAlive() || s.until() < now) {
 				s.bats().forEach(Entity::discard);
 				if (!player.isRemoved()) {
-					player.removeStatusEffect(StatusEffects.INVISIBILITY);
+					player.removeEffect(MobEffects.INVISIBILITY);
 					player.fallDistance = 0;
 					// The flock gathers back into a body
-					ServerWorld world = player.getServerWorld();
-					world.spawnParticles(ModParticles.BLOOD_MIST, player.getX(), player.getY() + 1, player.getZ(), 16, 0.4, 0.6, 0.4, 0.02);
+					ServerLevel world = player.serverLevel();
+					world.sendParticles(ModParticles.BLOOD_MIST, player.getX(), player.getY() + 1, player.getZ(), 16, 0.4, 0.6, 0.4, 0.02);
 					Fx.helix(world, player, 1.6f, 2.2f, 3, true, 10, WINE_INK);
-					Fx.burst(world, player.getPos().add(0, 1, 0), 1.3f, 6, BLOOD_INK);
+					Fx.burst(world, player.position().add(0, 1, 0), 1.3f, 6, BLOOD_INK);
 					Fx.shake(player, 1.0f, 6);
-					world.playSound(null, player.getBlockPos(), SoundEvents.ENTITY_BAT_TAKEOFF, SoundCategory.PLAYERS, 1.0f, 1.4f);
+					world.playSound(null, player.blockPosition(), SoundEvents.BAT_TAKEOFF, SoundSource.PLAYERS, 1.0f, 1.4f);
 				}
 				it.remove();
 				continue;
 			}
 			// The swarm flies where the Bloodkin looks; the bats flutter around it
-			Vec3d look = player.getRotationVec(1.0f);
-			player.setVelocity(look.multiply(0.7));
-			player.velocityModified = true;
+			Vec3 look = player.getViewVector(1.0f);
+			player.setDeltaMovement(look.scale(0.7));
+			player.hurtMarked = true;
 			player.fallDistance = 0;
-			ServerWorld world = player.getServerWorld();
-			for (BatEntity bat : s.bats()) {
+			ServerLevel world = player.serverLevel();
+			for (Bat bat : s.bats()) {
 				// A ring around the body, never in the Bloodkin's own face
 				double a = world.getRandom().nextDouble() * Math.PI * 2;
 				double r = 1.4 + world.getRandom().nextDouble();
-				Vec3d spot = player.getPos().add(Math.cos(a) * r, 0.2 + world.getRandom().nextDouble() * 1.4, Math.sin(a) * r);
-				bat.setVelocity(spot.subtract(bat.getPos()).multiply(0.4));
-				bat.velocityModified = true;
+				Vec3 spot = player.position().add(Math.cos(a) * r, 0.2 + world.getRandom().nextDouble() * 1.4, Math.sin(a) * r);
+				bat.setDeltaMovement(spot.subtract(bat.position()).scale(0.4));
+				bat.hurtMarked = true;
 			}
 			RaceData data = RaceState.of(player);
 			if (data.has(Talents.NIGHT_SWARM)) {
-				for (LivingEntity e : world.getEntitiesByClass(LivingEntity.class, player.getBoundingBox().expand(1.5),
-						e -> prey(e, player) && hasBlood(e) && !BLEEDING.containsKey(e.getUuid()))) {
+				for (LivingEntity e : world.getEntitiesOfClass(LivingEntity.class, player.getBoundingBox().inflate(1.5),
+						e -> prey(e, player) && hasBlood(e) && !BLEEDING.containsKey(e.getUUID()))) {
 					bleed(world, e, player, data);
 					splash(world, e, 6);
 				}
@@ -879,7 +879,7 @@ public final class Bloodkin {
 		tickDashes(now);
 		tickSwarms(now);
 		STORM.entrySet().removeIf(e -> {
-			ServerPlayerEntity player = server.getPlayerManager().getPlayer(e.getKey());
+			ServerPlayer player = server.getPlayerList().getPlayer(e.getKey());
 			if (player == null) {
 				return true;
 			}
@@ -898,12 +898,12 @@ public final class Bloodkin {
 				if (!(entity instanceof LivingEntity living) || !living.isAlive() || b.until() < now) {
 					return true;
 				}
-				ServerPlayerEntity owner = server.getPlayerManager().getPlayer(b.owner());
-				living.damage(owner != null ? b.world().getDamageSources().indirectMagic(owner, owner) : b.world().getDamageSources().magic(), b.perSecond());
+				ServerPlayer owner = server.getPlayerList().getPlayer(b.owner());
+				living.hurt(owner != null ? b.world().damageSources().indirectMagic(owner, owner) : b.world().damageSources().magic(), b.perSecond());
 				splash(b.world(), living, 3);
 				// Open Vein: the bleeding feeds its Bloodkin
 				if (owner != null && RaceState.of(owner).has(Talents.FANG_OPEN)) {
-					drink(owner, RaceState.of(owner), b.perSecond(), living instanceof Monster);
+					drink(owner, RaceState.of(owner), b.perSecond(), living instanceof Enemy);
 				}
 				return false;
 			});
@@ -911,8 +911,8 @@ public final class Bloodkin {
 	}
 
 	/** The race changed: its bats fly off, its marks and moments end. */
-	public static void cleanup(ServerPlayerEntity player) {
-		UUID id = player.getUuid();
+	public static void cleanup(ServerPlayer player) {
+		UUID id = player.getUUID();
 		SWARMS.removeIf(s -> {
 			if (s.player() == player) {
 				s.bats().forEach(Entity::discard);

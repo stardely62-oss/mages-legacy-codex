@@ -2,9 +2,9 @@ package euf.mageslegacy.masked;
 
 import java.util.List;
 import java.util.Optional;
-import net.minecraft.entity.EntityType;
-import net.minecraft.item.Item;
-import net.minecraft.item.Items;
+import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.item.Items;
 
 /**
  * A face one of the Masked can tear off and wear: the monsters it comes from (the first is the shape the wearer takes),

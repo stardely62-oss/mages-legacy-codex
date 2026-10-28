@@ -14,40 +14,40 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
-import net.minecraft.entity.Entity;
-import net.minecraft.entity.ItemEntity;
-import net.minecraft.entity.LivingEntity;
-import net.minecraft.entity.boss.WitherEntity;
-import net.minecraft.entity.boss.dragon.EnderDragonEntity;
-import net.minecraft.entity.damage.DamageSource;
-import net.minecraft.entity.effect.StatusEffect;
-import net.minecraft.entity.effect.StatusEffectInstance;
-import net.minecraft.entity.effect.StatusEffects;
-import net.minecraft.entity.mob.ElderGuardianEntity;
-import net.minecraft.entity.mob.EndermanEntity;
-import net.minecraft.entity.mob.MobEntity;
-import net.minecraft.entity.mob.Monster;
-import net.minecraft.entity.mob.WardenEntity;
-import net.minecraft.entity.passive.TameableEntity;
-import net.minecraft.entity.player.PlayerEntity;
-import net.minecraft.entity.projectile.ProjectileEntity;
-import net.minecraft.entity.projectile.ProjectileUtil;
-import net.minecraft.registry.tag.DamageTypeTags;
-import net.minecraft.registry.tag.FluidTags;
+import net.minecraft.core.BlockPos;
+import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
-import net.minecraft.server.network.ServerPlayerEntity;
-import net.minecraft.server.world.ServerWorld;
-import net.minecraft.sound.SoundCategory;
-import net.minecraft.sound.SoundEvents;
-import net.minecraft.text.Text;
-import net.minecraft.util.hit.BlockHitResult;
-import net.minecraft.util.hit.EntityHitResult;
-import net.minecraft.util.hit.HitResult;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.Box;
-import net.minecraft.util.math.Vec3d;
-import net.minecraft.world.RaycastContext;
-import net.minecraft.world.World;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.sounds.SoundEvents;
+import net.minecraft.sounds.SoundSource;
+import net.minecraft.tags.DamageTypeTags;
+import net.minecraft.tags.FluidTags;
+import net.minecraft.world.damagesource.DamageSource;
+import net.minecraft.world.effect.MobEffect;
+import net.minecraft.world.effect.MobEffectInstance;
+import net.minecraft.world.effect.MobEffects;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.Mob;
+import net.minecraft.world.entity.TamableAnimal;
+import net.minecraft.world.entity.boss.enderdragon.EnderDragon;
+import net.minecraft.world.entity.boss.wither.WitherBoss;
+import net.minecraft.world.entity.item.ItemEntity;
+import net.minecraft.world.entity.monster.ElderGuardian;
+import net.minecraft.world.entity.monster.EnderMan;
+import net.minecraft.world.entity.monster.Enemy;
+import net.minecraft.world.entity.monster.warden.Warden;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.entity.projectile.Projectile;
+import net.minecraft.world.entity.projectile.ProjectileUtil;
+import net.minecraft.world.level.ClipContext;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.BlockHitResult;
+import net.minecraft.world.phys.EntityHitResult;
+import net.minecraft.world.phys.HitResult;
+import net.minecraft.world.phys.Vec3;
 
 /**
  * Everything the Voidborn do. Part of each of them stayed in the void, so space gives way to them: the Void Step
@@ -84,21 +84,21 @@ public final class Voidborn {
 	public static final int VOID_INK = Fx.INK | 0x2A1446;
 	public static final int STAR_RGB = 0xE8E0FF;
 
-	private record Step(ServerPlayerEntity player, List<Vec3d> path, Set<UUID> hit, boolean through, List<ServerPlayerEntity> companions) {}
+	private record Step(ServerPlayer player, List<Vec3> path, Set<UUID> hit, boolean through, List<ServerPlayer> companions) {}
 
-	private record Well(ServerWorld world, Vec3d center, double radius, long until, ServerPlayerEntity owner, Set<UUID> pulled) {}
+	private record Well(ServerLevel world, Vec3 center, double radius, long until, ServerPlayer owner, Set<UUID> pulled) {}
 
 	/** An open way left by a Rift Step: whoever walks into its start comes out at its end. */
-	private record Door(ServerWorld world, Vec3d from, Vec3d to, long until) {}
+	private record Door(ServerLevel world, Vec3 from, Vec3 to, long until) {}
 
 	/**
 	 * A creature held in its puller's pocket: where it came from, and when it goes back. One taken by the Excision
 	 * stays until its Voidborn presses the key again ({@code until} is then far off); the Gaze's come back by themselves.
 	 */
-	private record Held(Entity entity, UUID owner, ServerWorld origin, Vec3d pos, float yaw, long until, boolean ally, boolean excised) {}
+	private record Held(Entity entity, UUID owner, ServerLevel origin, Vec3 pos, float yaw, long until, boolean ally, boolean excised) {}
 
 	/** A step into (or out of) the pocket, made a moment after the rift opens; {@code home}: out to one's spawn. */
-	private record Passage(ServerPlayerEntity player, long at, boolean in, boolean home) {}
+	private record Passage(ServerPlayer player, long at, boolean in, boolean home) {}
 
 	private static final List<Step> STEPS = new ArrayList<>();
 	private static final java.util.Map<UUID, Integer> STEP_AT = new java.util.HashMap<>();
@@ -127,8 +127,8 @@ public final class Voidborn {
 
 	/** A Voidborn took a blow: for a few seconds its pocket won't open. */
 	public static void onHurt(LivingEntity self, float amount) {
-		if (amount > 0 && self instanceof ServerPlayerEntity player && is(player)) {
-			LAST_HURT.put(player.getUuid(), now(player.getServer()));
+		if (amount > 0 && self instanceof ServerPlayer player && is(player)) {
+			LAST_HURT.put(player.getUUID(), now(player.getServer()));
 		}
 	}
 
@@ -154,19 +154,19 @@ public final class Voidborn {
 		return data.has(Talents.WELL_WIDE) ? 11 : WELL_RADIUS;
 	}
 
-	public static boolean is(PlayerEntity player) {
-		return player instanceof ServerPlayerEntity sp && RaceState.raceOf(sp).orElse(null) == Race.VOIDBORN;
+	public static boolean is(Player player) {
+		return player instanceof ServerPlayer sp && RaceState.raceOf(sp).orElse(null) == Race.VOIDBORN;
 	}
 
 	private static long now(MinecraftServer server) {
-		return server.getTicks();
+		return server.getTickCount();
 	}
 
-	private static boolean ready(ServerPlayerEntity player, RaceData data, int slot) {
+	private static boolean ready(ServerPlayer player, RaceData data, int slot) {
 		return data.readyAt.getOrDefault(slot, 0L) <= now(player.getServer());
 	}
 
-	private static void cooldown(ServerPlayerEntity player, RaceData data, int slot, int ticks) {
+	private static void cooldown(ServerPlayer player, RaceData data, int slot, int ticks) {
 		data.readyAt.put(slot, now(player.getServer()) + ticks);
 		data.dirty = true;
 	}
@@ -175,9 +175,9 @@ public final class Voidborn {
 	 * Whether this player is passing through solid matter right now: then blocks don't hold or smother it. On the
 	 * server that is a Void Step under way; on a client, its own player while the server says so.
 	 */
-	public static boolean phasing(PlayerEntity player) {
-		if (player.getWorld().isClient()) {
-			return player.isMainPlayer() && player.getWorld().getTime() <= clientPhaseUntil;
+	public static boolean phasing(Player player) {
+		if (player.level().isClientSide()) {
+			return player.isLocalPlayer() && player.level().getGameTime() <= clientPhaseUntil;
 		}
 		for (Step s : STEPS) {
 			if (s.player() == player) {
@@ -188,95 +188,95 @@ public final class Voidborn {
 	}
 
 	/** An enemy for the Well and the Step: a monster, or a mob hunting a player. Pets and other players never. */
-	private static boolean enemy(Entity e, ServerPlayerEntity player) {
-		return e instanceof LivingEntity living && living.isAlive() && e != player && !(e instanceof PlayerEntity)
-				&& !(e instanceof TameableEntity tame && tame.isTamed()) && !e.getCommandTags().contains("mages_legacy_bond")
-				&& (e instanceof Monster || (e instanceof MobEntity m && m.getTarget() instanceof PlayerEntity));
+	private static boolean enemy(Entity e, ServerPlayer player) {
+		return e instanceof LivingEntity living && living.isAlive() && e != player && !(e instanceof Player)
+				&& !(e instanceof TamableAnimal tame && tame.isTame()) && !e.getTags().contains("mages_legacy_bond")
+				&& (e instanceof Enemy || (e instanceof Mob m && m.getTarget() instanceof Player));
 	}
 
 	/** Too big for any pocket: the dragon, the Wither, the Warden, the elder guardian. */
 	private static boolean tooBig(Entity e) {
-		return e instanceof EnderDragonEntity || e instanceof WitherEntity || e instanceof WardenEntity || e instanceof ElderGuardianEntity;
+		return e instanceof EnderDragon || e instanceof WitherBoss || e instanceof Warden || e instanceof ElderGuardian;
 	}
 
 	// ---- once a second ----
 
-	public static void tickSecond(ServerPlayerEntity player, RaceData data) {
-		ServerWorld world = player.getServerWorld();
-		boolean home = Pocket.in(player) || world.getRegistryKey() == World.END;
-		boolean dark = world.getLightLevel(BlockPos.ofFloored(player.getEyePos())) <= 7;
+	public static void tickSecond(ServerPlayer player, RaceData data) {
+		ServerLevel world = player.serverLevel();
+		boolean home = Pocket.in(player) || world.dimension() == Level.END;
+		boolean dark = world.getMaxLocalRawBrightness(BlockPos.containing(player.getEyePosition())) <= 7;
 		data.addResource(home ? 1.8f : dark ? 1.2f : 0.6f);
 		// Water burns them as it burns the endermen; rain saps them
-		if (world.getFluidState(player.getBlockPos()).isIn(FluidTags.WATER) || world.getFluidState(BlockPos.ofFloored(player.getEyePos())).isIn(FluidTags.WATER)) {
-			player.damage(world.getDamageSources().magic(), data.has(Talents.POCKET_WATER) ? 1 : 2);
-			world.spawnParticles(ModParticles.VOID_MOTE, player.getX(), player.getY() + 1, player.getZ(), 8, 0.3, 0.5, 0.3, 0.02);
-			world.playSound(null, player.getBlockPos(), SoundEvents.BLOCK_FIRE_EXTINGUISH, SoundCategory.PLAYERS, 0.5f, 1.4f);
-		} else if (world.hasRain(BlockPos.ofFloored(player.getEyePos()))) {
-			refresh(player, StatusEffects.WEAKNESS, 60);
+		if (world.getFluidState(player.blockPosition()).is(FluidTags.WATER) || world.getFluidState(BlockPos.containing(player.getEyePosition())).is(FluidTags.WATER)) {
+			player.hurt(world.damageSources().magic(), data.has(Talents.POCKET_WATER) ? 1 : 2);
+			world.sendParticles(ModParticles.VOID_MOTE, player.getX(), player.getY() + 1, player.getZ(), 8, 0.3, 0.5, 0.3, 0.02);
+			world.playSound(null, player.blockPosition(), SoundEvents.FIRE_EXTINGUISH, SoundSource.PLAYERS, 0.5f, 1.4f);
+		} else if (world.isRainingAt(BlockPos.containing(player.getEyePosition()))) {
+			refresh(player, MobEffects.WEAKNESS, 60);
 			if (!data.has(Talents.POCKET_STORM)) {
-				refresh(player, StatusEffects.SLOWNESS, 60);
+				refresh(player, MobEffects.MOVEMENT_SLOWDOWN, 60);
 			}
 		}
 		if (data.has(Talents.POCKET_REST) && Pocket.in(player)) {
-			refresh(player, StatusEffects.REGENERATION, 60);
+			refresh(player, MobEffects.REGENERATION, 60);
 		}
 	}
 
-	private static void refresh(ServerPlayerEntity player, StatusEffect effect, int duration) {
-		StatusEffectInstance current = player.getStatusEffect(effect);
+	private static void refresh(ServerPlayer player, MobEffect effect, int duration) {
+		MobEffectInstance current = player.getEffect(effect);
 		if (current == null || current.getDuration() <= 30) {
-			player.addStatusEffect(new StatusEffectInstance(effect, duration, 0, true, false, true));
+			player.addEffect(new MobEffectInstance(effect, duration, 0, true, false, true));
 		}
 	}
 
 	/** Nothing touches a Voidborn inside the rock; and about one arrow or fireball in seven passes through the rest of them. */
 	public static boolean avoids(LivingEntity self, DamageSource source) {
-		if (!(self instanceof ServerPlayerEntity player) || !is(player)) {
+		if (!(self instanceof ServerPlayer player) || !is(player)) {
 			return false;
 		}
 		if (phasing(player)) {
 			return true;
 		}
-		if (source.isIn(DamageTypeTags.IS_PROJECTILE) && player.getRandom().nextFloat() < PROJECTILE_PASS) {
-			ServerWorld world = player.getServerWorld();
-			world.spawnParticles(ModParticles.VOID_MOTE, player.getX(), player.getY() + 1.2, player.getZ(), 10, 0.25, 0.4, 0.25, 0.03);
-			world.playSound(null, player.getBlockPos(), SoundEvents.ENTITY_ENDERMAN_TELEPORT, SoundCategory.PLAYERS, 0.4f, 1.8f);
+		if (source.is(DamageTypeTags.IS_PROJECTILE) && player.getRandom().nextFloat() < PROJECTILE_PASS) {
+			ServerLevel world = player.serverLevel();
+			world.sendParticles(ModParticles.VOID_MOTE, player.getX(), player.getY() + 1.2, player.getZ(), 10, 0.25, 0.4, 0.25, 0.03);
+			world.playSound(null, player.blockPosition(), SoundEvents.ENDERMAN_TELEPORT, SoundSource.PLAYERS, 0.4f, 1.8f);
 			return true;
 		}
 		return false;
 	}
 
 	/** Endermen take a Voidborn's look for one of their own. */
-	public static boolean kin(PlayerEntity player) {
+	public static boolean kin(Player player) {
 		return is(player);
 	}
 
 	/** A creature died at a Voidborn's hand: a little void flows back; an enderman is worth a lot of experience. */
-	public static void onKill(ServerPlayerEntity player, LivingEntity victim) {
-		if (!is(player) || !(victim instanceof Monster)) {
+	public static void onKill(ServerPlayer player, LivingEntity victim) {
+		if (!is(player) || !(victim instanceof Enemy)) {
 			return;
 		}
 		RaceData data = RaceState.of(player);
 		data.addResource(3);
 		// The dark is the void's own: a kill in it teaches more
-		if (player.getServerWorld().getLightLevel(BlockPos.ofFloored(player.getEyePos())) <= 7) {
+		if (player.serverLevel().getMaxLocalRawBrightness(BlockPos.containing(player.getEyePosition())) <= 7) {
 			Progression.addXp(player, data, Progression.HUNT, 2, Progression.HUNT_CAP);
 		}
-		if (data.has(Talents.WELL_HUNGER) && WELLS.stream().anyMatch(w -> w.owner() == player && w.pulled().contains(victim.getUuid()))) {
+		if (data.has(Talents.WELL_HUNGER) && WELLS.stream().anyMatch(w -> w.owner() == player && w.pulled().contains(victim.getUUID()))) {
 			data.addResource(10);
 		}
 		// Kin of the void teach the most, though an enderman farm is no faster a road than any other hunt
-		if (victim instanceof EndermanEntity) {
+		if (victim instanceof EnderMan) {
 			Progression.addXp(player, data, Progression.HUNT, 8, Progression.HUNT_CAP);
 		}
 	}
 
 	/** The world's beds won't hold a Voidborn: they sleep only in their pocket. */
-	public static boolean mayNotSleep(ServerPlayerEntity player) {
+	public static boolean mayNotSleep(ServerPlayer player) {
 		if (!is(player) || Pocket.in(player)) {
 			return false;
 		}
-		player.sendMessage(Text.translatable("mages_legacy.voidborn.no_sleep"), true);
+		player.displayClientMessage(Component.translatable("mages_legacy.voidborn.no_sleep"), true);
 		return true;
 	}
 
@@ -285,27 +285,27 @@ public final class Voidborn {
 	 * nobody in the overworld is left awake, morning comes.
 	 */
 	public static void tickSleep(MinecraftServer server) {
-		ServerWorld pocket = Pocket.world(server);
+		ServerLevel pocket = Pocket.world(server);
 		if (pocket == null) {
 			return;
 		}
-		boolean rested = pocket.getPlayers().stream().anyMatch(p -> p.isSleeping() && p.getSleepTimer() >= 99);
-		ServerWorld overworld = server.getOverworld();
-		if (!rested || !overworld.isNight() || overworld.getPlayers().stream().anyMatch(p -> !p.isSpectator() && !p.isSleeping())) {
+		boolean rested = pocket.players().stream().anyMatch(p -> p.isSleeping() && p.getSleepTimer() >= 99);
+		ServerLevel overworld = server.overworld();
+		if (!rested || !overworld.isNight() || overworld.players().stream().anyMatch(p -> !p.isSpectator() && !p.isSleeping())) {
 			return;
 		}
-		long time = overworld.getTimeOfDay() + 24000;
-		overworld.setTimeOfDay(time - time % 24000);
+		long time = overworld.getDayTime() + 24000;
+		overworld.setDayTime(time - time % 24000);
 		// A night slept at home in the void
-		for (ServerPlayerEntity p : pocket.getPlayers()) {
+		for (ServerPlayer p : pocket.players()) {
 			if (p.isSleeping() && is(p)) {
 				Progression.addXp(p, RaceState.of(p), 10);
 			}
 		}
-		for (ServerWorld w : List.of(pocket, overworld)) {
-			for (ServerPlayerEntity p : w.getPlayers()) {
+		for (ServerLevel w : List.of(pocket, overworld)) {
+			for (ServerPlayer p : w.players()) {
 				if (p.isSleeping()) {
-					p.wakeUp(false, true);
+					p.stopSleepInBed(false, true);
 				}
 			}
 		}
@@ -313,7 +313,7 @@ public final class Voidborn {
 
 	// ---- abilities ----
 
-	public static AbilityResult use(ServerPlayerEntity player, RaceData data, int slot) {
+	public static AbilityResult use(ServerPlayer player, RaceData data, int slot) {
 		return switch (slot) {
 			case 0 -> step(player, data);
 			case 1 -> well(player, data);
@@ -329,7 +329,7 @@ public final class Voidborn {
 	 * ceilings alike, coming out where the body fits (never inside the rock, never in lava). Bedrock and other
 	 * unbreakable things stop it. What it passes through on the way takes 4 and is slowed.
 	 */
-	public static AbilityResult step(ServerPlayerEntity player, RaceData data) {
+	public static AbilityResult step(ServerPlayer player, RaceData data) {
 		if (STEPS.stream().anyMatch(s -> s.player() == player)) {
 			return AbilityResult.HINTED;
 		}
@@ -341,23 +341,23 @@ public final class Voidborn {
 		if (data.resource < cost) {
 			return AbilityResult.NO_RESOURCE;
 		}
-		List<Vec3d> path = stepPath(player, stepRange(data));
+		List<Vec3> path = stepPath(player, stepRange(data));
 		if (path.size() < 2) {
 			return AbilityResult.NO_SPACE;
 		}
 		data.addResource(-cost);
 		cooldown(player, data, 0, data.has(Talents.STEP_QUICK) ? 100 : STEP_COOLDOWN);
-		ServerWorld world = player.getServerWorld();
+		ServerLevel world = player.serverLevel();
 		boolean through = path.stream().anyMatch(p -> !fits(player, p));
 		player.stopRiding();
 		// Taken Along: one player standing right beside goes through too
-		List<ServerPlayerEntity> companions = !data.has(Talents.STEP_ALLY) ? List.of()
-				: world.getPlayers(p -> p != player && p.isAlive() && !p.isSpectator() && p.squaredDistanceTo(player) < 4).stream().limit(1).toList();
+		List<ServerPlayer> companions = !data.has(Talents.STEP_ALLY) ? List.of()
+				: world.getPlayers(p -> p != player && p.isAlive() && !p.isSpectator() && p.distanceToSqr(player) < 4).stream().limit(1).toList();
 		STEPS.add(new Step(player, path, new HashSet<>(), through, companions));
-		STEP_AT.put(player.getUuid(), 0);
-		player.addStatusEffect(new StatusEffectInstance(StatusEffects.INVISIBILITY, STEP_TICKS + 4, 0, true, false, false));
-		Vec3d start = path.get(0);
-		Vec3d end = path.get(path.size() - 1);
+		STEP_AT.put(player.getUUID(), 0);
+		player.addEffect(new MobEffectInstance(MobEffects.INVISIBILITY, STEP_TICKS + 4, 0, true, false, false));
+		Vec3 start = path.get(0);
+		Vec3 end = path.get(path.size() - 1);
 		// The world tears where the body goes in and where it will come out; between, a dark streak through the rock
 		boolean door = data.has(Talents.STEP_RIFT);
 		Fx.rift(world, start.add(0, 1, 0), 2.4f, 1.3f, door ? 100 : 16, VOID_RGB);
@@ -370,9 +370,9 @@ public final class Voidborn {
 		Fx.phase(player, STEP_TICKS);
 		Fx.voidScreen(player, STEP_TICKS + 4);
 		Fx.fov(player, 0.3f, STEP_TICKS + 6);
-		world.spawnParticles(ModParticles.VOID_MOTE, start.x, start.y + 1, start.z, 24, 0.4, 0.7, 0.4, 0.06);
-		world.playSound(null, player.getBlockPos(), SoundEvents.ENTITY_ENDERMAN_TELEPORT, SoundCategory.PLAYERS, 1.0f, 0.5f);
-		world.playSound(null, player.getBlockPos(), SoundEvents.BLOCK_RESPAWN_ANCHOR_DEPLETE.value(), SoundCategory.PLAYERS, 0.6f, 1.6f);
+		world.sendParticles(ModParticles.VOID_MOTE, start.x, start.y + 1, start.z, 24, 0.4, 0.7, 0.4, 0.06);
+		world.playSound(null, player.blockPosition(), SoundEvents.ENDERMAN_TELEPORT, SoundSource.PLAYERS, 1.0f, 0.5f);
+		world.playSound(null, player.blockPosition(), SoundEvents.RESPAWN_ANCHOR_DEPLETE.value(), SoundSource.PLAYERS, 0.6f, 1.6f);
 		return AbilityResult.OK;
 	}
 
@@ -381,15 +381,15 @@ public final class Voidborn {
 	 * can come out. From the far end back, the first spot where the body fits (or fits a little higher or lower)
 	 * ends it; the path then runs straight to that spot. Empty if there is none.
 	 */
-	static List<Vec3d> stepPath(ServerPlayerEntity player, double range) {
-		ServerWorld world = player.getServerWorld();
-		Vec3d look = player.getRotationVec(1.0f).normalize();
-		Vec3d start = player.getPos();
-		List<Vec3d> line = new ArrayList<>();
+	static List<Vec3> stepPath(ServerPlayer player, double range) {
+		ServerLevel world = player.serverLevel();
+		Vec3 look = player.getViewVector(1.0f).normalize();
+		Vec3 start = player.position();
+		List<Vec3> line = new ArrayList<>();
 		line.add(start);
 		for (double d = 0.25; d <= range; d += 0.25) {
-			Vec3d p = start.add(look.multiply(d));
-			if (unbreakable(player, p) || !world.getWorldBorder().contains(BlockPos.ofFloored(p))) {
+			Vec3 p = start.add(look.scale(d));
+			if (unbreakable(player, p) || !world.getWorldBorder().isWithinBounds(BlockPos.containing(p))) {
 				break;
 			}
 			line.add(p);
@@ -397,9 +397,9 @@ public final class Voidborn {
 		double[] lifts = {0, 0.5, 1, -0.5, -1, 1.5, -1.5};
 		for (int i = line.size() - 1; i >= 6; i--) {
 			for (double lift : lifts) {
-				Vec3d spot = line.get(i).add(0, lift, 0);
+				Vec3 spot = line.get(i).add(0, lift, 0);
 				if (fits(player, spot)) {
-					List<Vec3d> path = new ArrayList<>(line.subList(0, i + 1));
+					List<Vec3> path = new ArrayList<>(line.subList(0, i + 1));
 					path.set(path.size() - 1, spot);
 					return path;
 				}
@@ -409,18 +409,18 @@ public final class Voidborn {
 	}
 
 	/** Whether the body would stand free at this spot: nothing solid, no lava. */
-	private static boolean fits(ServerPlayerEntity player, Vec3d spot) {
-		Box box = player.getBoundingBox().offset(spot.subtract(player.getPos()));
-		ServerWorld world = player.getServerWorld();
-		return world.isSpaceEmpty(player, box) && world.getStatesInBoxIfLoaded(box).noneMatch(s -> s.getFluidState().isIn(FluidTags.LAVA));
+	private static boolean fits(ServerPlayer player, Vec3 spot) {
+		AABB box = player.getBoundingBox().move(spot.subtract(player.position()));
+		ServerLevel world = player.serverLevel();
+		return world.noCollision(player, box) && world.getBlockStatesIfLoaded(box).noneMatch(s -> s.getFluidState().is(FluidTags.LAVA));
 	}
 
 	/** Whether the body at this spot would overlap something nothing can pass: bedrock, barriers, portal frames. */
-	private static boolean unbreakable(ServerPlayerEntity player, Vec3d spot) {
-		ServerWorld world = player.getServerWorld();
-		Box box = player.getBoundingBox().offset(spot.subtract(player.getPos()));
-		for (BlockPos pos : BlockPos.iterate(BlockPos.ofFloored(box.minX, box.minY, box.minZ), BlockPos.ofFloored(box.maxX, box.maxY, box.maxZ))) {
-			if (world.getBlockState(pos).getHardness(world, pos) < 0) {
+	private static boolean unbreakable(ServerPlayer player, Vec3 spot) {
+		ServerLevel world = player.serverLevel();
+		AABB box = player.getBoundingBox().move(spot.subtract(player.position()));
+		for (BlockPos pos : BlockPos.betweenClosed(BlockPos.containing(box.minX, box.minY, box.minZ), BlockPos.containing(box.maxX, box.maxY, box.maxZ))) {
+			if (world.getBlockState(pos).getDestroySpeed(world, pos) < 0) {
 				return true;
 			}
 		}
@@ -430,53 +430,53 @@ public final class Voidborn {
 	private static void tickSteps(long now) {
 		for (Iterator<Step> it = STEPS.iterator(); it.hasNext(); ) {
 			Step s = it.next();
-			ServerPlayerEntity player = s.player();
+			ServerPlayer player = s.player();
 			if (player.isRemoved() || !player.isAlive()) {
 				it.remove();
-				STEP_AT.remove(player.getUuid());
+				STEP_AT.remove(player.getUUID());
 				continue;
 			}
-			ServerWorld world = player.getServerWorld();
-			int step = STEP_AT.merge(player.getUuid(), 1, Integer::sum);
+			ServerLevel world = player.serverLevel();
+			int step = STEP_AT.merge(player.getUUID(), 1, Integer::sum);
 			int last = s.path().size() - 1;
 			// Eased: slow out of the rift, fast through the rock, slow into the light again
 			float t0 = ease((float) (step - 1) / STEP_TICKS);
 			float t1 = ease((float) step / STEP_TICKS);
-			Vec3d a = s.path().get(Math.min(last, Math.round(t0 * last)));
-			Vec3d b = s.path().get(Math.min(last, Math.round(t1 * last)));
-			Box swept = player.getBoundingBox().offset(a.subtract(player.getPos())).union(player.getBoundingBox().offset(b.subtract(player.getPos())));
-			for (LivingEntity e : world.getEntitiesByClass(LivingEntity.class, swept, e -> enemy(e, player) && !s.hit().contains(e.getUuid()))) {
-				s.hit().add(e.getUuid());
+			Vec3 a = s.path().get(Math.min(last, Math.round(t0 * last)));
+			Vec3 b = s.path().get(Math.min(last, Math.round(t1 * last)));
+			AABB swept = player.getBoundingBox().move(a.subtract(player.position())).minmax(player.getBoundingBox().move(b.subtract(player.position())));
+			for (LivingEntity e : world.getEntitiesOfClass(LivingEntity.class, swept, e -> enemy(e, player) && !s.hit().contains(e.getUUID()))) {
+				s.hit().add(e.getUUID());
 				RaceData data = RaceState.of(player);
 				boolean sever = data.has(Talents.STEP_SEVER);
-				e.damage(world.getDamageSources().indirectMagic(player, player), sever ? 9 : data.has(Talents.STEP_CUT) ? 6 : 4);
-				e.addStatusEffect(new StatusEffectInstance(StatusEffects.SLOWNESS, 60, sever ? 2 : 1));
+				e.hurt(world.damageSources().indirectMagic(player, player), sever ? 9 : data.has(Talents.STEP_CUT) ? 6 : 4);
+				e.addEffect(new MobEffectInstance(MobEffects.MOVEMENT_SLOWDOWN, 60, sever ? 2 : 1));
 				if (data.has(Talents.STEP_REND)) {
-					e.addStatusEffect(new StatusEffectInstance(StatusEffects.WEAKNESS, 80, 1));
+					e.addEffect(new MobEffectInstance(MobEffects.WEAKNESS, 80, 1));
 				}
 				if (data.has(Talents.STEP_MEND)) {
 					player.heal(2);
 				}
 				if (sever) {
-					Fx.slash(world, e.getPos().add(0, e.getHeight() / 2, 0), b.subtract(a), 1.2f + e.getWidth(), 90, 9, VOID_RGB);
+					Fx.slash(world, e.position().add(0, e.getBbHeight() / 2, 0), b.subtract(a), 1.2f + e.getBbWidth(), 90, 9, VOID_RGB);
 				}
-				Fx.burst(world, e.getPos().add(0, e.getHeight() / 2, 0), 0.8f + e.getWidth(), 6, VOID_RGB);
+				Fx.burst(world, e.position().add(0, e.getBbHeight() / 2, 0), 0.8f + e.getBbWidth(), 6, VOID_RGB);
 			}
 			for (int i = 0; i <= 3; i++) {
-				Vec3d p = a.lerp(b, i / 3.0);
-				world.spawnParticles(ModParticles.VOID_MOTE, p.x, p.y + 1, p.z, 2, 0.25, 0.5, 0.25, 0.02);
-				world.spawnParticles(ModParticles.STAR, p.x, p.y + 1, p.z, 1, 0.4, 0.6, 0.4, 0.0);
+				Vec3 p = a.lerp(b, i / 3.0);
+				world.sendParticles(ModParticles.VOID_MOTE, p.x, p.y + 1, p.z, 2, 0.25, 0.5, 0.25, 0.02);
+				world.sendParticles(ModParticles.STAR, p.x, p.y + 1, p.z, 1, 0.4, 0.6, 0.4, 0.0);
 			}
-			player.setVelocity(Vec3d.ZERO);
+			player.setDeltaMovement(Vec3.ZERO);
 			player.fallDistance = 0;
-			player.networkHandler.requestTeleport(b.x, b.y, b.z, player.getYaw(), player.getPitch());
+			player.connection.teleport(b.x, b.y, b.z, player.getYRot(), player.getXRot());
 			if (step >= STEP_TICKS) {
 				it.remove();
-				STEP_AT.remove(player.getUuid());
+				STEP_AT.remove(player.getUUID());
 				emerge(player, b, s.through());
-				for (ServerPlayerEntity companion : s.companions()) {
-					if (companion.isAlive() && companion.getServerWorld() == world) {
-						companion.teleport(world, b.x + 0.6, b.y, b.z, companion.getYaw(), companion.getPitch());
+				for (ServerPlayer companion : s.companions()) {
+					if (companion.isAlive() && companion.serverLevel() == world) {
+						companion.teleportTo(world, b.x + 0.6, b.y, b.z, companion.getYRot(), companion.getXRot());
 						companion.fallDistance = 0;
 						Fx.rift(world, b.add(0.6, 1, 0), 2.2f, 1.2f, 12, VOID_RGB);
 					}
@@ -491,17 +491,17 @@ public final class Voidborn {
 	}
 
 	/** Out of the void again: a flash, cracks in the ground where the body landed, the world shaking a little. */
-	private static void emerge(ServerPlayerEntity player, Vec3d at, boolean through) {
-		ServerWorld world = player.getServerWorld();
-		player.removeStatusEffect(StatusEffects.INVISIBILITY);
+	private static void emerge(ServerPlayer player, Vec3 at, boolean through) {
+		ServerLevel world = player.serverLevel();
+		player.removeEffect(MobEffects.INVISIBILITY);
 		// Veil: monsters that hunted the Voidborn lose it in the void
 		if (RaceState.of(player).has(Talents.STEP_VEIL)) {
-			for (MobEntity m : world.getEntitiesByClass(MobEntity.class, player.getBoundingBox().expand(32), m -> m.getTarget() == player)) {
+			for (Mob m : world.getEntitiesOfClass(Mob.class, player.getBoundingBox().inflate(32), m -> m.getTarget() == player)) {
 				m.setTarget(null);
 			}
 		}
-		player.setVelocity(Vec3d.ZERO);
-		player.velocityModified = true;
+		player.setDeltaMovement(Vec3.ZERO);
+		player.hurtMarked = true;
 		player.fallDistance = 0;
 		Fx.burst(world, at.add(0, 1, 0), 1.7f, 7, VOID_RGB);
 		Fx.ring(world, at, 0.3f, 2.8f, 10, VOID_INK);
@@ -509,36 +509,36 @@ public final class Voidborn {
 		Fx.shake(player, 1.2f, 7);
 		// Exit Funnel: the void closing behind the body drags the enemies around to where it came out
 		if (RaceState.of(player).has(Talents.STEP_PULL)) {
-			for (LivingEntity e : world.getEntitiesByClass(LivingEntity.class, player.getBoundingBox().expand(5), e -> enemy(e, player))) {
-				Vec3d to = at.subtract(e.getPos());
-				e.setVelocity(to.multiply(0.25).add(0, 0.25, 0));
-				e.velocityModified = true;
+			for (LivingEntity e : world.getEntitiesOfClass(LivingEntity.class, player.getBoundingBox().inflate(5), e -> enemy(e, player))) {
+				Vec3 to = at.subtract(e.position());
+				e.setDeltaMovement(to.scale(0.25).add(0, 0.25, 0));
+				e.hurtMarked = true;
 				Fx.tendril(world, e, player, 8, VOID_RGB, STAR_RGB);
 			}
 			Fx.vortex(world, at.add(0, 1, 0), 1.4f, 16, VOID_RGB);
 		}
-		world.spawnParticles(ModParticles.VOID_MOTE, at.x, at.y + 1, at.z, 30, 0.2, 0.4, 0.2, 0.12);
-		world.spawnParticles(ModParticles.STAR, at.x, at.y + 1, at.z, 12, 0.6, 0.8, 0.6, 0.0);
-		world.playSound(null, player.getBlockPos(), SoundEvents.ENTITY_ENDERMAN_TELEPORT, SoundCategory.PLAYERS, 1.0f, 1.2f);
+		world.sendParticles(ModParticles.VOID_MOTE, at.x, at.y + 1, at.z, 30, 0.2, 0.4, 0.2, 0.12);
+		world.sendParticles(ModParticles.STAR, at.x, at.y + 1, at.z, 12, 0.6, 0.8, 0.6, 0.0);
+		world.playSound(null, player.blockPosition(), SoundEvents.ENDERMAN_TELEPORT, SoundSource.PLAYERS, 1.0f, 1.2f);
 		if (through) {
 			Progression.addXp(player, RaceState.of(player), "voidborn_step", 1, 20);
 		}
 	}
 
 	/** Where the look meets a block within {@code range}, or {@code range} along it. */
-	private static Vec3d aim(ServerPlayerEntity player, double range) {
-		Vec3d eye = player.getEyePos();
-		Vec3d end = eye.add(player.getRotationVec(1.0f).multiply(range));
-		BlockHitResult hit = player.getWorld().raycast(new RaycastContext(eye, end, RaycastContext.ShapeType.COLLIDER, RaycastContext.FluidHandling.NONE, player));
-		return hit.getType() == HitResult.Type.MISS ? end : hit.getPos().add(hit.getSide().getVector().getX() * 1.5, hit.getSide().getVector().getY() * 1.5,
-				hit.getSide().getVector().getZ() * 1.5);
+	private static Vec3 aim(ServerPlayer player, double range) {
+		Vec3 eye = player.getEyePosition();
+		Vec3 end = eye.add(player.getViewVector(1.0f).scale(range));
+		BlockHitResult hit = player.level().clip(new ClipContext(eye, end, ClipContext.Block.COLLIDER, ClipContext.Fluid.NONE, player));
+		return hit.getType() == HitResult.Type.MISS ? end : hit.getLocation().add(hit.getDirection().getNormal().getX() * 1.5, hit.getDirection().getNormal().getY() * 1.5,
+				hit.getDirection().getNormal().getZ() * 1.5);
 	}
 
 	/**
 	 * The Well: a black hole where you look (up to 20 blocks) for 4 seconds. Enemies within 8 blocks, their arrows
 	 * and loose items are dragged into it; at its heart it hurts; at the end it collapses with a blow.
 	 */
-	public static AbilityResult well(ServerPlayerEntity player, RaceData data) {
+	public static AbilityResult well(ServerPlayer player, RaceData data) {
 		if (!ready(player, data, 1)) {
 			return AbilityResult.COOLDOWN;
 		}
@@ -552,27 +552,27 @@ public final class Voidborn {
 	}
 
 	/** A Well of this player's opens at {@code center}. */
-	public static void openWell(ServerPlayerEntity player, RaceData data, Vec3d center) {
-		ServerWorld world = player.getServerWorld();
+	public static void openWell(ServerPlayer player, RaceData data, Vec3 center) {
+		ServerLevel world = player.serverLevel();
 		int ticks = data.has(Talents.WELL_LONG) ? 120 : WELL_TICKS;
 		double radius = wellRadius(data);
 		WELLS.add(new Well(world, center, radius, now(player.getServer()) + ticks, player, new HashSet<>()));
 		Fx.vortex(world, center, (float) radius * 0.45f, ticks, VOID_RGB);
 		Fx.mark(world, ground(world, center), null, (float) radius * 0.45f, ticks + 10, VOID_INK, Fx.CRACKS);
 		Fx.shake(player, 0.8f, 8);
-		world.playSound(null, BlockPos.ofFloored(center), SoundEvents.BLOCK_BEACON_ACTIVATE, SoundCategory.PLAYERS, 1.2f, 0.5f);
-		world.playSound(null, BlockPos.ofFloored(center), SoundEvents.BLOCK_PORTAL_TRIGGER, SoundCategory.PLAYERS, 0.5f, 1.6f);
+		world.playSound(null, BlockPos.containing(center), SoundEvents.BEACON_ACTIVATE, SoundSource.PLAYERS, 1.2f, 0.5f);
+		world.playSound(null, BlockPos.containing(center), SoundEvents.PORTAL_TRIGGER, SoundSource.PLAYERS, 0.5f, 1.6f);
 	}
 
 	/** The ground under a point (up to 12 blocks down), or the point itself over a drop. */
-	private static Vec3d ground(ServerWorld world, Vec3d p) {
-		BlockPos.Mutable pos = BlockPos.ofFloored(p).mutableCopy();
+	private static Vec3 ground(ServerLevel world, Vec3 p) {
+		BlockPos.MutableBlockPos pos = BlockPos.containing(p).mutable();
 		for (int i = 0; i < 12; i++) {
-			net.minecraft.util.shape.VoxelShape shape = world.getBlockState(pos).getCollisionShape(world, pos);
-			if (!shape.isEmpty() && pos.getY() + shape.getMax(net.minecraft.util.math.Direction.Axis.Y) <= p.y) {
-				return new Vec3d(p.x, pos.getY() + shape.getMax(net.minecraft.util.math.Direction.Axis.Y), p.z);
+			net.minecraft.world.phys.shapes.VoxelShape shape = world.getBlockState(pos).getCollisionShape(world, pos);
+			if (!shape.isEmpty() && pos.getY() + shape.max(net.minecraft.core.Direction.Axis.Y) <= p.y) {
+				return new Vec3(p.x, pos.getY() + shape.max(net.minecraft.core.Direction.Axis.Y), p.z);
 			}
-			pos.move(net.minecraft.util.math.Direction.DOWN);
+			pos.move(net.minecraft.core.Direction.DOWN);
 		}
 		return p;
 	}
@@ -580,30 +580,30 @@ public final class Voidborn {
 	private static void tickWells(MinecraftServer server, long now) {
 		for (Iterator<Well> it = WELLS.iterator(); it.hasNext(); ) {
 			Well w = it.next();
-			ServerPlayerEntity owner = w.owner().isRemoved() ? null : w.owner();
-			ServerWorld world = w.world();
-			Box reach = new Box(w.center(), w.center()).expand(w.radius());
+			ServerPlayer owner = w.owner().isRemoved() ? null : w.owner();
+			ServerLevel world = w.world();
+			AABB reach = new AABB(w.center(), w.center()).inflate(w.radius());
 			RaceData data = owner == null ? null : RaceState.of(owner);
 			if (owner != null) {
-				for (LivingEntity e : world.getEntitiesByClass(LivingEntity.class, reach, e -> enemy(e, owner))) {
+				for (LivingEntity e : world.getEntitiesOfClass(LivingEntity.class, reach, e -> enemy(e, owner))) {
 					pull(e, w.center(), 0.16, w.radius());
-					w.pulled().add(e.getUuid());
+					w.pulled().add(e.getUUID());
 					if (now % 20 == 0 && e.getBoundingBox().getCenter().distanceTo(w.center()) < 1.8) {
-						e.damage(world.getDamageSources().indirectMagic(owner, owner), data.has(Talents.WELL_HEART) ? 3 : 2);
+						e.hurt(world.damageSources().indirectMagic(owner, owner), data.has(Talents.WELL_HEART) ? 3 : 2);
 					}
 				}
 			}
 			// Arrows not of their own, and loose things; with Swallowing, arrows reaching the heart are gone
-			for (Entity e : world.getOtherEntities(null, reach, e -> e instanceof ItemEntity
-					|| e instanceof ProjectileEntity p && (owner == null || p.getOwner() != owner))) {
+			for (Entity e : world.getEntities(null, reach, e -> e instanceof ItemEntity
+					|| e instanceof Projectile p && (owner == null || p.getOwner() != owner))) {
 				pull(e, w.center(), 0.12, w.radius());
-				if (e instanceof ProjectileEntity && data != null && data.has(Talents.WELL_EAT) && e.getPos().distanceTo(w.center()) < 1.2) {
+				if (e instanceof Projectile && data != null && data.has(Talents.WELL_EAT) && e.position().distanceTo(w.center()) < 1.2) {
 					e.discard();
 					data.addResource(2);
 				}
 			}
 			if (now % 4 == 0) {
-				world.spawnParticles(ModParticles.STAR, w.center().x, w.center().y, w.center().z, 2, 1.5, 1.5, 1.5, 0.0);
+				world.sendParticles(ModParticles.STAR, w.center().x, w.center().y, w.center().z, 2, 1.5, 1.5, 1.5, 0.0);
 			}
 			if (w.until() <= now) {
 				it.remove();
@@ -613,31 +613,31 @@ public final class Voidborn {
 	}
 
 	/** Drags an entity towards a point, harder the nearer it is, never past it. */
-	private static void pull(Entity e, Vec3d center, double strength, double radius) {
-		Vec3d to = center.subtract(e.getBoundingBox().getCenter());
+	private static void pull(Entity e, Vec3 center, double strength, double radius) {
+		Vec3 to = center.subtract(e.getBoundingBox().getCenter());
 		double d = to.length();
 		if (d < 0.3) {
-			e.setVelocity(e.getVelocity().multiply(0.3));
+			e.setDeltaMovement(e.getDeltaMovement().scale(0.3));
 		} else {
 			double force = strength * (0.4 + 0.6 * (1 - Math.min(1, d / radius)));
-			e.setVelocity(e.getVelocity().multiply(0.6).add(to.normalize().multiply(force * Math.min(1, d))));
+			e.setDeltaMovement(e.getDeltaMovement().scale(0.6).add(to.normalize().scale(force * Math.min(1, d))));
 		}
-		e.velocityModified = true;
+		e.hurtMarked = true;
 		e.fallDistance = 0;
 	}
 
 	/** The Well collapses: a blow at its heart for whatever it holds, a flash, and the world drawing breath. */
-	private static void collapse(Well w, ServerPlayerEntity owner) {
-		ServerWorld world = w.world();
-		Vec3d c = w.center();
+	private static void collapse(Well w, ServerPlayer owner) {
+		ServerLevel world = w.world();
+		Vec3 c = w.center();
 		if (owner != null) {
 			RaceData data = RaceState.of(owner);
-			for (LivingEntity e : world.getEntitiesByClass(LivingEntity.class, new Box(c, c).expand(4), e -> enemy(e, owner))) {
-				e.damage(world.getDamageSources().indirectMagic(owner, owner), data.has(Talents.WELL_COLLAPSE) ? 8 : 6);
+			for (LivingEntity e : world.getEntitiesOfClass(LivingEntity.class, new AABB(c, c).inflate(4), e -> enemy(e, owner))) {
+				e.hurt(world.damageSources().indirectMagic(owner, owner), data.has(Talents.WELL_COLLAPSE) ? 8 : 6);
 			}
 			if (data.has(Talents.WELL_HOLD)) {
-				for (LivingEntity e : world.getEntitiesByClass(LivingEntity.class, new Box(c, c).expand(w.radius()), e -> enemy(e, owner))) {
-					e.addStatusEffect(new StatusEffectInstance(StatusEffects.SLOWNESS, 60, 1));
+				for (LivingEntity e : world.getEntitiesOfClass(LivingEntity.class, new AABB(c, c).inflate(w.radius()), e -> enemy(e, owner))) {
+					e.addEffect(new MobEffectInstance(MobEffects.MOVEMENT_SLOWDOWN, 60, 1));
 				}
 			}
 			if (data != null && !w.pulled().isEmpty()) {
@@ -647,22 +647,22 @@ public final class Voidborn {
 		}
 		Fx.burst(world, c, 4.0f, 9, VOID_RGB);
 		Fx.ring(world, ground(world, c), 6, 0.3f, 10, VOID_INK);
-		world.spawnParticles(ModParticles.VOID_MOTE, c.x, c.y, c.z, 40, 0.3, 0.3, 0.3, 0.25);
-		world.spawnParticles(ModParticles.STAR, c.x, c.y, c.z, 20, 1.2, 1.2, 1.2, 0.0);
-		world.playSound(null, BlockPos.ofFloored(c), SoundEvents.ENTITY_GENERIC_EXPLODE, SoundCategory.PLAYERS, 0.7f, 0.5f);
-		world.playSound(null, BlockPos.ofFloored(c), SoundEvents.BLOCK_BEACON_DEACTIVATE, SoundCategory.PLAYERS, 1.0f, 0.6f);
+		world.sendParticles(ModParticles.VOID_MOTE, c.x, c.y, c.z, 40, 0.3, 0.3, 0.3, 0.25);
+		world.sendParticles(ModParticles.STAR, c.x, c.y, c.z, 20, 1.2, 1.2, 1.2, 0.0);
+		world.playSound(null, BlockPos.containing(c), SoundEvents.GENERIC_EXPLODE, SoundSource.PLAYERS, 0.7f, 0.5f);
+		world.playSound(null, BlockPos.containing(c), SoundEvents.BEACON_DEACTIVATE, SoundSource.PLAYERS, 1.0f, 0.6f);
 	}
 
 	/**
 	 * Excision: the creature you look at (up to 24 blocks, in plain sight) is torn into your pocket for 6 seconds and
 	 * then put back where it was. An enemy comes back dazed; a friend comes back mended. Bosses are too big for it.
 	 */
-	public static AbilityResult excise(ServerPlayerEntity player, RaceData data) {
+	public static AbilityResult excise(ServerPlayer player, RaceData data) {
 		return excise(player, data, lookedAt(player, EXCISE_RANGE));
 	}
 
 	/** The Excision of a given creature (the one looked at, or one a test picks). */
-	public static AbilityResult excise(ServerPlayerEntity player, RaceData data, LivingEntity target) {
+	public static AbilityResult excise(ServerPlayer player, RaceData data, LivingEntity target) {
 		// Pressed at nothing while holding someone: everyone held comes back now
 		if (target == null || HELD.stream().anyMatch(h -> h.entity() == target)) {
 			if (holding(player)) {
@@ -676,8 +676,8 @@ public final class Voidborn {
 		}
 		boolean ally = !enemy(target, player);
 		// Only one enemy at a time; friends, as many as you like
-		if (!ally && HELD.stream().anyMatch(h -> h.excised() && !h.ally() && h.owner().equals(player.getUuid()))) {
-			player.sendMessage(Text.translatable("mages_legacy.voidborn.one_enemy"), true);
+		if (!ally && HELD.stream().anyMatch(h -> h.excised() && !h.ally() && h.owner().equals(player.getUUID()))) {
+			player.displayClientMessage(Component.translatable("mages_legacy.voidborn.one_enemy"), true);
 			return AbilityResult.HINTED;
 		}
 		if (!ready(player, data, 2)) {
@@ -687,7 +687,7 @@ public final class Voidborn {
 		if (data.resource < cost) {
 			return AbilityResult.NO_RESOURCE;
 		}
-		ServerWorld pocket = Pocket.world(player.getServer());
+		ServerLevel pocket = Pocket.world(player.getServer());
 		if (pocket == null) {
 			return AbilityResult.LOCKED;
 		}
@@ -695,9 +695,9 @@ public final class Voidborn {
 		data.dirty = true;
 		take(player, data, pocket, target, ally);
 		// A player taken brings the players standing right beside them along
-		if (target instanceof PlayerEntity) {
-			for (ServerPlayerEntity other : player.getServerWorld().getPlayers(p -> p != player && p != target && p.isAlive() && !p.isSpectator()
-					&& p.squaredDistanceTo(target) < 9 && HELD.stream().noneMatch(h -> h.entity() == p))) {
+		if (target instanceof Player) {
+			for (ServerPlayer other : player.serverLevel().getPlayers(p -> p != player && p != target && p.isAlive() && !p.isSpectator()
+					&& p.distanceToSqr(target) < 9 && HELD.stream().noneMatch(h -> h.entity() == p))) {
 				take(player, data, pocket, other, true);
 			}
 		}
@@ -708,63 +708,63 @@ public final class Voidborn {
 	}
 
 	/** Lets go of everyone this Voidborn's Excision holds: they come back where they were. */
-	private static void release(ServerPlayerEntity player) {
+	private static void release(ServerPlayer player) {
 		long now = now(player.getServer());
-		HELD.replaceAll(h -> h.excised() && h.owner().equals(player.getUuid())
+		HELD.replaceAll(h -> h.excised() && h.owner().equals(player.getUUID())
 				? new Held(h.entity(), h.owner(), h.origin(), h.pos(), h.yaw(), now, h.ally(), true) : h);
 	}
 
 	/** One creature torn into the pocket: an enemy into the sealed cell, a friend onto the island. */
-	private static void take(ServerPlayerEntity player, RaceData data, ServerWorld pocket, LivingEntity target, boolean ally) {
-		ServerWorld world = player.getServerWorld();
+	private static void take(ServerPlayer player, RaceData data, ServerLevel pocket, LivingEntity target, boolean ally) {
+		ServerLevel world = player.serverLevel();
 		int room = Pocket.room(player, data);
 		Pocket.build(pocket, room, data.voidborn, Pocket.half(data));
-		Vec3d from = target.getPos();
-		float yaw = target.getYaw();
+		Vec3 from = target.position();
+		float yaw = target.getYRot();
 		// A thread of void to it, a rift behind it, and it is drawn in
 		Fx.tendril(world, player, target, 10, VOID_RGB, STAR_RGB);
-		Fx.rift(world, from.add(0, target.getHeight() / 2, 0), target.getHeight() + 1.2f, target.getWidth() + 1.0f, 18, VOID_RGB);
-		Fx.burst(world, from.add(0, target.getHeight() / 2, 0), 1.2f + target.getWidth(), 7, VOID_INK);
-		implode(world, from.add(0, target.getHeight() / 2, 0));
-		world.playSound(null, target.getBlockPos(), SoundEvents.ITEM_CHORUS_FRUIT_TELEPORT, SoundCategory.PLAYERS, 1.2f, 0.5f);
+		Fx.rift(world, from.add(0, target.getBbHeight() / 2, 0), target.getBbHeight() + 1.2f, target.getBbWidth() + 1.0f, 18, VOID_RGB);
+		Fx.burst(world, from.add(0, target.getBbHeight() / 2, 0), 1.2f + target.getBbWidth(), 7, VOID_INK);
+		implode(world, from.add(0, target.getBbHeight() / 2, 0));
+		world.playSound(null, target.blockPosition(), SoundEvents.CHORUS_FRUIT_TELEPORT, SoundSource.PLAYERS, 1.2f, 0.5f);
 		target.stopRiding();
-		target.removeAllPassengers();
-		Vec3d into = ally ? Pocket.center(room).add(world.getRandom().nextDouble() * 2 - 1, 0, world.getRandom().nextDouble() * 2 - 1) : Pocket.cell(room);
+		target.ejectPassengers();
+		Vec3 into = ally ? Pocket.center(room).add(world.getRandom().nextDouble() * 2 - 1, 0, world.getRandom().nextDouble() * 2 - 1) : Pocket.cell(room);
 		pocket.setChunkForced((int) Math.floor(into.x) >> 4, (int) Math.floor(into.z) >> 4, true);
 		Entity moved = Pocket.move(target, pocket, into, yaw);
 		// Dropped from High: an enemy comes back out of the sky, if there is sky above its spot
-		Vec3d back = from;
+		Vec3 back = from;
 		if (!ally && data.has(Talents.EXCISE_DROP)) {
-			Vec3d up = from.add(0, 10, 0);
-			if (world.isSpaceEmpty(target.getBoundingBox().offset(0, 10, 0))) {
+			Vec3 up = from.add(0, 10, 0);
+			if (world.noCollision(target.getBoundingBox().move(0, 10, 0))) {
 				back = up;
 			}
 		}
-		HELD.add(new Held(moved, player.getUuid(), world, back, yaw, Long.MAX_VALUE, ally, true));
+		HELD.add(new Held(moved, player.getUUID(), world, back, yaw, Long.MAX_VALUE, ally, true));
 	}
 
 
 	/** Motes of void drawn into a point from all around. */
-	private static void implode(ServerWorld world, Vec3d c) {
+	private static void implode(ServerLevel world, Vec3 c) {
 		for (int i = 0; i < 24; i++) {
 			double a = world.getRandom().nextDouble() * Math.PI * 2;
 			double y = (world.getRandom().nextDouble() - 0.5) * 2;
-			Vec3d out = new Vec3d(Math.cos(a) * 1.6, y, Math.sin(a) * 1.6);
-			Vec3d at = c.add(out);
-			world.spawnParticles(ModParticles.VOID_MOTE, at.x, at.y, at.z, 0, -out.x * 0.12, -out.y * 0.12, -out.z * 0.12, 1);
+			Vec3 out = new Vec3(Math.cos(a) * 1.6, y, Math.sin(a) * 1.6);
+			Vec3 at = c.add(out);
+			world.sendParticles(ModParticles.VOID_MOTE, at.x, at.y, at.z, 0, -out.x * 0.12, -out.y * 0.12, -out.z * 0.12, 1);
 		}
 	}
 
 	/** The living creature the eye rests on within {@code range}, if no wall stands between. */
-	private static LivingEntity lookedAt(ServerPlayerEntity player, double range) {
-		Vec3d eye = player.getEyePos();
-		Vec3d look = player.getRotationVec(1.0f);
-		BlockHitResult wall = player.getWorld().raycast(new RaycastContext(eye, eye.add(look.multiply(range)), RaycastContext.ShapeType.COLLIDER,
-				RaycastContext.FluidHandling.NONE, player));
-		double reach = wall.getType() == HitResult.Type.MISS ? range : wall.getPos().distanceTo(eye);
-		Vec3d end = eye.add(look.multiply(reach));
-		Box box = player.getBoundingBox().stretch(look.multiply(reach)).expand(1);
-		EntityHitResult hit = ProjectileUtil.raycast(player, eye, end, box, e -> e instanceof LivingEntity l && l.isAlive() && e != player, reach * reach);
+	private static LivingEntity lookedAt(ServerPlayer player, double range) {
+		Vec3 eye = player.getEyePosition();
+		Vec3 look = player.getViewVector(1.0f);
+		BlockHitResult wall = player.level().clip(new ClipContext(eye, eye.add(look.scale(range)), ClipContext.Block.COLLIDER,
+				ClipContext.Fluid.NONE, player));
+		double reach = wall.getType() == HitResult.Type.MISS ? range : wall.getLocation().distanceTo(eye);
+		Vec3 end = eye.add(look.scale(reach));
+		AABB box = player.getBoundingBox().expandTowards(look.scale(reach)).inflate(1);
+		EntityHitResult hit = ProjectileUtil.getEntityHitResult(player, eye, end, box, e -> e instanceof LivingEntity l && l.isAlive() && e != player, reach * reach);
 		return hit != null && hit.getEntity() instanceof LivingEntity living ? living : null;
 	}
 
@@ -772,31 +772,31 @@ public final class Voidborn {
 	 * Someone joins the game standing in a pocket that isn't theirs (taken in by a friend's Excision, then gone
 	 * offline): nobody holds them any more, so they come out at their spawn point.
 	 */
-	public static void onJoin(ServerPlayerEntity player) {
+	public static void onJoin(ServerPlayer player) {
 		RaceData data = RaceState.of(player);
 		if (!Pocket.in(player) || (data != null && data.race == Race.VOIDBORN && Pocket.inOwnRoom(player, data))
 				|| HELD.stream().anyMatch(h -> h.entity() == player)) {
 			return;
 		}
-		ServerWorld to = player.getServer().getWorld(player.getSpawnPointDimension());
-		BlockPos spawn = player.getSpawnPointPosition();
-		Vec3d at = to != null && spawn != null
-				? PlayerEntity.findRespawnPosition(to, spawn, player.getSpawnAngle(), player.isSpawnForced(), true).orElse(null) : null;
+		ServerLevel to = player.getServer().getLevel(player.getRespawnDimension());
+		BlockPos spawn = player.getRespawnPosition();
+		Vec3 at = to != null && spawn != null
+				? Player.findRespawnPositionAndUseSpawnBlock(to, spawn, player.getRespawnAngle(), player.isRespawnForced(), true).orElse(null) : null;
 		if (at == null) {
-			to = player.getServer().getOverworld();
-			at = Vec3d.ofBottomCenter(to.getSpawnPos());
+			to = player.getServer().overworld();
+			at = Vec3.atBottomCenterOf(to.getSharedSpawnPos());
 		}
-		player.teleport(to, at.x, at.y, at.z, player.getYaw(), player.getPitch());
+		player.teleportTo(to, at.x, at.y, at.z, player.getYRot(), player.getXRot());
 	}
 
 	/** Whether this Voidborn holds someone in its pocket by the Excision now. */
-	public static boolean holding(ServerPlayerEntity player) {
-		return HELD.stream().anyMatch(h -> h.excised() && h.owner().equals(player.getUuid()));
+	public static boolean holding(ServerPlayer player) {
+		return HELD.stream().anyMatch(h -> h.excised() && h.owner().equals(player.getUUID()));
 	}
 
 	/** What the client shows of a Voidborn beyond the shared data: whether its Excision holds someone. */
-	public static net.minecraft.nbt.NbtCompound clientInfo(ServerPlayerEntity player) {
-		net.minecraft.nbt.NbtCompound nbt = new net.minecraft.nbt.NbtCompound();
+	public static net.minecraft.nbt.CompoundTag clientInfo(ServerPlayer player) {
+		net.minecraft.nbt.CompoundTag nbt = new net.minecraft.nbt.CompoundTag();
 		nbt.putBoolean("holding", holding(player));
 		return nbt;
 	}
@@ -804,7 +804,7 @@ public final class Voidborn {
 	private static void tickHeld(MinecraftServer server, long now) {
 		for (Iterator<Held> it = HELD.iterator(); it.hasNext(); ) {
 			Held h = it.next();
-			ServerPlayerEntity owner = server.getPlayerManager().getPlayer(h.owner());
+			ServerPlayer owner = server.getPlayerList().getPlayer(h.owner());
 			// A held one is let go when its Voidborn lets go, leaves or dies
 			boolean ownerGone = owner == null || !owner.isAlive();
 			// An enemy held costs its Voidborn 1 void a second; when the void runs out, it falls back out
@@ -821,7 +821,7 @@ public final class Voidborn {
 				// Gnawing Void: an enemy held by the Excision wears away, down to a third of its health
 				if (h.excised() && !h.ally() && now % 20 == 0 && h.entity() instanceof LivingEntity living
 						&& RaceState.of(owner).has(Talents.EXCISE_LONG) && living.getHealth() > living.getMaxHealth() / 3) {
-					living.damage(living.getDamageSources().magic(), 2);
+					living.hurt(living.damageSources().magic(), 2);
 				}
 				continue;
 			}
@@ -835,27 +835,27 @@ public final class Voidborn {
 				data.dirty = true;
 			}
 			Entity e = h.entity();
-			ServerWorld pocket = Pocket.world(server);
+			ServerLevel pocket = Pocket.world(server);
 			if (pocket != null && HELD.stream().noneMatch(o -> o.owner().equals(h.owner()))) {
-				Vec3d cell = e.getPos();
+				Vec3 cell = e.position();
 				pocket.setChunkForced((int) Math.floor(cell.x) >> 4, (int) Math.floor(cell.z) >> 4, false);
 			}
 			if (e.isRemoved() || (e instanceof LivingEntity l && !l.isAlive())) {
 				continue;
 			}
 			Entity back = Pocket.move(e, h.origin(), h.pos(), h.yaw());
-			ServerWorld world = h.origin();
-			Vec3d c = h.pos().add(0, back.getHeight() / 2, 0);
-			Fx.rift(world, c, back.getHeight() + 1.2f, back.getWidth() + 1.0f, 16, VOID_RGB);
-			Fx.burst(world, c, 1.2f + back.getWidth(), 7, VOID_RGB);
-			world.spawnParticles(ModParticles.VOID_MOTE, c.x, c.y, c.z, 24, 0.2, 0.3, 0.2, 0.14);
-			world.playSound(null, BlockPos.ofFloored(h.pos()), SoundEvents.ITEM_CHORUS_FRUIT_TELEPORT, SoundCategory.PLAYERS, 1.2f, 0.8f);
+			ServerLevel world = h.origin();
+			Vec3 c = h.pos().add(0, back.getBbHeight() / 2, 0);
+			Fx.rift(world, c, back.getBbHeight() + 1.2f, back.getBbWidth() + 1.0f, 16, VOID_RGB);
+			Fx.burst(world, c, 1.2f + back.getBbWidth(), 7, VOID_RGB);
+			world.sendParticles(ModParticles.VOID_MOTE, c.x, c.y, c.z, 24, 0.2, 0.3, 0.2, 0.14);
+			world.playSound(null, BlockPos.containing(h.pos()), SoundEvents.CHORUS_FRUIT_TELEPORT, SoundSource.PLAYERS, 1.2f, 0.8f);
 			if (back instanceof LivingEntity living) {
 				if (h.ally()) {
 					living.heal(6);
 				} else {
-					living.addStatusEffect(new StatusEffectInstance(StatusEffects.SLOWNESS, 60, 1));
-					living.addStatusEffect(new StatusEffectInstance(StatusEffects.WEAKNESS, 60, 0));
+					living.addEffect(new MobEffectInstance(MobEffects.MOVEMENT_SLOWDOWN, 60, 1));
+					living.addEffect(new MobEffectInstance(MobEffects.WEAKNESS, 60, 0));
 				}
 			}
 		}
@@ -865,20 +865,20 @@ public final class Voidborn {
 	 * The Pocket: a rift opens before you and a moment later you are through it, in your own room of the pocket
 	 * world; pressed there, the same way back to the very spot you left. Going in costs void; coming out is free.
 	 */
-	public static AbilityResult pocket(ServerPlayerEntity player, RaceData data) {
+	public static AbilityResult pocket(ServerPlayer player, RaceData data) {
 		if (PASSAGES.stream().anyMatch(p -> p.player() == player)) {
 			return AbilityResult.HINTED;
 		}
 		boolean in = !Pocket.inOwnRoom(player, data);
-		Long hurt = LAST_HURT.get(player.getUuid());
+		Long hurt = LAST_HURT.get(player.getUUID());
 		if (in && hurt != null && now(player.getServer()) - hurt < POCKET_CALM) {
-			player.sendMessage(Text.translatable("mages_legacy.voidborn.pocket_calm"), true);
+			player.displayClientMessage(Component.translatable("mages_legacy.voidborn.pocket_calm"), true);
 			return AbilityResult.HINTED;
 		}
 		// The pocket is a home, not a way out of a fight: it won't open while monsters near are after you
-		if (in && !player.getServerWorld().getEntitiesByClass(MobEntity.class, player.getBoundingBox().expand(16),
+		if (in && !player.serverLevel().getEntitiesOfClass(Mob.class, player.getBoundingBox().inflate(16),
 				m -> m.isAlive() && m.getTarget() == player).isEmpty()) {
-			player.sendMessage(Text.translatable("mages_legacy.voidborn.pocket_hunted"), true);
+			player.displayClientMessage(Component.translatable("mages_legacy.voidborn.pocket_hunted"), true);
 			return AbilityResult.HINTED;
 		}
 		if (in) {
@@ -892,13 +892,13 @@ public final class Voidborn {
 			data.addResource(-cost);
 			cooldown(player, data, 3, data.has(Talents.POCKET_QUICK) ? 80 : POCKET_COOLDOWN);
 		}
-		ServerWorld world = player.getServerWorld();
-		Vec3d ahead = player.getPos().add(player.getRotationVec(1.0f).multiply(1, 0, 1).normalize().multiply(1.2)).add(0, 1.3, 0);
+		ServerLevel world = player.serverLevel();
+		Vec3 ahead = player.position().add(player.getViewVector(1.0f).multiply(1, 0, 1).normalize().scale(1.2)).add(0, 1.3, 0);
 		Fx.rift(world, ahead, 2.8f, 1.7f, POCKET_DELAY + 18, VOID_RGB);
 		Fx.voidScreen(player, POCKET_DELAY * 2 + 6);
 		Fx.fov(player, -0.15f, POCKET_DELAY + 4);
-		world.playSound(null, player.getBlockPos(), SoundEvents.BLOCK_PORTAL_TRIGGER, SoundCategory.PLAYERS, 0.4f, 1.8f);
-		world.playSound(null, player.getBlockPos(), SoundEvents.ENTITY_ENDERMAN_TELEPORT, SoundCategory.PLAYERS, 0.8f, 0.6f);
+		world.playSound(null, player.blockPosition(), SoundEvents.PORTAL_TRIGGER, SoundSource.PLAYERS, 0.4f, 1.8f);
+		world.playSound(null, player.blockPosition(), SoundEvents.ENDERMAN_TELEPORT, SoundSource.PLAYERS, 0.8f, 0.6f);
 		PASSAGES.add(new Passage(player, now(player.getServer()) + POCKET_DELAY, in, !in && data.alt && data.has(Talents.POCKET_HOME)));
 		return AbilityResult.OK;
 	}
@@ -910,7 +910,7 @@ public final class Voidborn {
 				continue;
 			}
 			it.remove();
-			ServerPlayerEntity player = p.player();
+			ServerPlayer player = p.player();
 			if (player.isRemoved() || !player.isAlive()) {
 				continue;
 			}
@@ -920,15 +920,15 @@ public final class Voidborn {
 			} else {
 				Pocket.leave(player, data, p.home());
 				if (data.has(Talents.POCKET_WARD)) {
-					player.addStatusEffect(new StatusEffectInstance(StatusEffects.RESISTANCE, 60, 1, true, true, true));
+					player.addEffect(new MobEffectInstance(MobEffects.DAMAGE_RESISTANCE, 60, 1, true, true, true));
 				}
 			}
 			// The rift closing behind on the far side
-			ServerWorld world = player.getServerWorld();
-			Vec3d at = player.getPos().add(0, 1.3, 0);
+			ServerLevel world = player.serverLevel();
+			Vec3 at = player.position().add(0, 1.3, 0);
 			Fx.rift(world, at, 2.8f, 1.7f, 14, VOID_RGB);
-			world.spawnParticles(ModParticles.STAR, at.x, at.y, at.z, 20, 0.8, 1.0, 0.8, 0.0);
-			world.playSound(null, player.getBlockPos(), SoundEvents.ENTITY_ENDERMAN_TELEPORT, SoundCategory.PLAYERS, 0.8f, 1.2f);
+			world.sendParticles(ModParticles.STAR, at.x, at.y, at.z, 20, 0.8, 1.0, 0.8, 0.0);
+			world.playSound(null, player.blockPosition(), SoundEvents.ENDERMAN_TELEPORT, SoundSource.PLAYERS, 0.8f, 1.2f);
 		}
 	}
 
@@ -936,37 +936,37 @@ public final class Voidborn {
 	private static void tickDoors(MinecraftServer server, long now) {
 		DOORS.removeIf(d -> d.until() < now);
 		for (Door d : DOORS) {
-			for (ServerPlayerEntity p : d.world().getPlayers(p -> p.isAlive() && !p.isSpectator() && p.getPos().distanceTo(d.from()) < 1.0
+			for (ServerPlayer p : d.world().getPlayers(p -> p.isAlive() && !p.isSpectator() && p.position().distanceTo(d.from()) < 1.0
 					&& !phasing(p))) {
-				p.teleport(d.world(), d.to().x, d.to().y, d.to().z, p.getYaw(), p.getPitch());
+				p.teleportTo(d.world(), d.to().x, d.to().y, d.to().z, p.getYRot(), p.getXRot());
 				p.fallDistance = 0;
 				Fx.burst(d.world(), d.to().add(0, 1, 0), 1.2f, 6, VOID_RGB);
-				d.world().playSound(null, p.getBlockPos(), SoundEvents.ENTITY_ENDERMAN_TELEPORT, SoundCategory.PLAYERS, 0.8f, 1.3f);
+				d.world().playSound(null, p.blockPosition(), SoundEvents.ENDERMAN_TELEPORT, SoundSource.PLAYERS, 0.8f, 1.3f);
 			}
 		}
 	}
 
 	/** Pocket Garden: in a Voidborn's room, whatever grows there grows three times as fast. */
 	private static void tickGardens(MinecraftServer server) {
-		ServerWorld pocket = Pocket.world(server);
+		ServerLevel pocket = Pocket.world(server);
 		if (pocket == null) {
 			return;
 		}
-		for (ServerPlayerEntity player : pocket.getPlayers()) {
+		for (ServerPlayer player : pocket.players()) {
 			RaceData data = RaceState.of(player);
 			if (data == null || !data.has(Talents.POCKET_GARDEN) || !Pocket.inOwnRoom(player, data)) {
 				continue;
 			}
-			BlockPos c = BlockPos.ofFloored(Pocket.center(data.voidborn.room));
+			BlockPos c = BlockPos.containing(Pocket.center(data.voidborn.room));
 			int half = Pocket.half(data);
-			for (BlockPos pos : BlockPos.iterate(c.add(-half, -1, -half), c.add(half, 2, half))) {
-				net.minecraft.block.BlockState state = pocket.getBlockState(pos);
-				if (state.hasRandomTicks() && (state.getBlock() instanceof net.minecraft.block.Fertilizable || state.isOf(net.minecraft.block.Blocks.SUGAR_CANE)
-						|| state.isOf(net.minecraft.block.Blocks.CACTUS) || state.isOf(net.minecraft.block.Blocks.NETHER_WART))) {
+			for (BlockPos pos : BlockPos.betweenClosed(c.offset(-half, -1, -half), c.offset(half, 2, half))) {
+				net.minecraft.world.level.block.state.BlockState state = pocket.getBlockState(pos);
+				if (state.isRandomlyTicking() && (state.getBlock() instanceof net.minecraft.world.level.block.BonemealableBlock || state.is(net.minecraft.world.level.block.Blocks.SUGAR_CANE)
+						|| state.is(net.minecraft.world.level.block.Blocks.CACTUS) || state.is(net.minecraft.world.level.block.Blocks.NETHER_WART))) {
 					for (int i = 0; i < 2; i++) {
 						state = pocket.getBlockState(pos);
-						if (state.hasRandomTicks()) {
-							state.randomTick(pocket, pos.toImmutable(), pocket.getRandom());
+						if (state.isRandomlyTicking()) {
+							state.randomTick(pocket, pos.immutable(), pocket.getRandom());
 						}
 					}
 				}
@@ -978,17 +978,17 @@ public final class Voidborn {
 	 * The Mage's Gaze crown (Alt): every enemy within 16 blocks falls into the void at once for 4 seconds, and comes
 	 * back dazed. Once in 5 minutes.
 	 */
-	public static AbilityResult gaze(ServerPlayerEntity player, RaceData data) {
+	public static AbilityResult gaze(ServerPlayer player, RaceData data) {
 		if (!ready(player, data, GAZE_SLOT)) {
 			return AbilityResult.COOLDOWN;
 		}
 		if (data.resource < GAZE_COST) {
 			return AbilityResult.NO_RESOURCE;
 		}
-		ServerWorld pocket = Pocket.world(player.getServer());
-		ServerWorld world = player.getServerWorld();
-		List<LivingEntity> enemies = world.getEntitiesByClass(LivingEntity.class, player.getBoundingBox().expand(16),
-				e -> enemy(e, player) && !tooBig(e) && e.squaredDistanceTo(player) < 256).stream().limit(12).toList();
+		ServerLevel pocket = Pocket.world(player.getServer());
+		ServerLevel world = player.serverLevel();
+		List<LivingEntity> enemies = world.getEntitiesOfClass(LivingEntity.class, player.getBoundingBox().inflate(16),
+				e -> enemy(e, player) && !tooBig(e) && e.distanceToSqr(player) < 256).stream().limit(12).toList();
 		if (pocket == null) {
 			return AbilityResult.LOCKED;
 		}
@@ -999,24 +999,24 @@ public final class Voidborn {
 		cooldown(player, data, GAZE_SLOT, GAZE_COOLDOWN);
 		int room = Pocket.room(player, data);
 		Pocket.build(pocket, room, data.voidborn, Pocket.half(data));
-		Vec3d cell = Pocket.cell(room);
+		Vec3 cell = Pocket.cell(room);
 		pocket.setChunkForced((int) Math.floor(cell.x) >> 4, (int) Math.floor(cell.z) >> 4, true);
 		long until = now(player.getServer()) + 80;
 		for (LivingEntity e : enemies) {
-			Vec3d from = e.getPos();
-			Fx.rift(world, from.add(0, e.getHeight() / 2, 0), e.getHeight() + 1.2f, e.getWidth() + 1.0f, 16, VOID_RGB);
-			implode(world, from.add(0, e.getHeight() / 2, 0));
+			Vec3 from = e.position();
+			Fx.rift(world, from.add(0, e.getBbHeight() / 2, 0), e.getBbHeight() + 1.2f, e.getBbWidth() + 1.0f, 16, VOID_RGB);
+			implode(world, from.add(0, e.getBbHeight() / 2, 0));
 			e.stopRiding();
-			e.removeAllPassengers();
-			Entity moved = Pocket.move(e, pocket, cell, e.getYaw());
-			HELD.add(new Held(moved, player.getUuid(), world, from, e.getYaw(), until, false, false));
+			e.ejectPassengers();
+			Entity moved = Pocket.move(e, pocket, cell, e.getYRot());
+			HELD.add(new Held(moved, player.getUUID(), world, from, e.getYRot(), until, false, false));
 		}
 		// The mage's eye opens over the Voidborn for a moment
-		Fx.vortex(world, player.getPos().add(0, 4, 0), 1.6f, 30, VOID_RGB);
-		Fx.mark(world, player.getPos(), null, 6, 60, VOID_INK, Fx.CRACKS);
+		Fx.vortex(world, player.position().add(0, 4, 0), 1.6f, 30, VOID_RGB);
+		Fx.mark(world, player.position(), null, 6, 60, VOID_INK, Fx.CRACKS);
 		Fx.voidScreen(player, 12);
 		Fx.shake(player, 2.5f, 14);
-		world.playSound(null, player.getBlockPos(), SoundEvents.ENTITY_WARDEN_SONIC_BOOM, SoundCategory.PLAYERS, 0.8f, 0.5f);
+		world.playSound(null, player.blockPosition(), SoundEvents.WARDEN_SONIC_BOOM, SoundSource.PLAYERS, 0.8f, 0.5f);
 		return AbilityResult.OK;
 	}
 
@@ -1024,7 +1024,7 @@ public final class Voidborn {
 	 * Hearth of the Mage crown: a killing blow sends a Voidborn into its Pocket instead, with half its health and
 	 * everything it carries, once in 20 minutes. It comes out (H) at its spawn point.
 	 */
-	public static boolean allowDeath(ServerPlayerEntity player) {
+	public static boolean allowDeath(ServerPlayer player) {
 		RaceData data = RaceState.of(player);
 		if (data == null || data.race != Race.VOIDBORN || !data.has(Talents.POCKET_HEARTH) || !ready(player, data, HEARTH_SLOT)
 				|| Pocket.world(player.getServer()) == null) {
@@ -1032,19 +1032,19 @@ public final class Voidborn {
 		}
 		cooldown(player, data, HEARTH_SLOT, LONG_COOLDOWN);
 		player.setHealth(player.getMaxHealth() / 2);
-		player.extinguish();
-		player.clearStatusEffects();
-		Fx.rift(player.getServerWorld(), player.getPos().add(0, 1.3, 0), 2.8f, 1.7f, 20, VOID_RGB);
+		player.clearFire();
+		player.removeAllEffects();
+		Fx.rift(player.serverLevel(), player.position().add(0, 1.3, 0), 2.8f, 1.7f, 20, VOID_RGB);
 		Fx.voidScreen(player, 24);
 		boolean inPocket = Pocket.inOwnRoom(player, data);
 		if (!inPocket) {
 			Pocket.enter(player, data);
 			// Out again to safety, not back into whatever killed it
-			data.voidborn.returnWorld = player.getSpawnPointDimension();
-			BlockPos spawn = player.getSpawnPointPosition() != null ? player.getSpawnPointPosition() : player.getServer().getOverworld().getSpawnPos();
-			data.voidborn.returnPos = Vec3d.ofBottomCenter(spawn.up());
+			data.voidborn.returnWorld = player.getRespawnDimension();
+			BlockPos spawn = player.getRespawnPosition() != null ? player.getRespawnPosition() : player.getServer().overworld().getSharedSpawnPos();
+			data.voidborn.returnPos = Vec3.atBottomCenterOf(spawn.above());
 		}
-		player.sendMessage(Text.translatable("mages_legacy.voidborn.hearth").formatted(net.minecraft.util.Formatting.LIGHT_PURPLE), false);
+		player.displayClientMessage(Component.translatable("mages_legacy.voidborn.hearth").withStyle(net.minecraft.ChatFormatting.LIGHT_PURPLE), false);
 		return false;
 	}
 
@@ -1064,9 +1064,9 @@ public final class Voidborn {
 	}
 
 	/** The race changed: whatever it held goes back, its wells close. */
-	public static void cleanup(ServerPlayerEntity player) {
+	public static void cleanup(ServerPlayer player) {
 		WELLS.removeIf(w -> w.owner() == player);
 		STEPS.removeIf(s -> s.player() == player);
-		HELD.replaceAll(h -> h.owner().equals(player.getUuid()) ? new Held(h.entity(), h.owner(), h.origin(), h.pos(), h.yaw(), 0, h.ally(), h.excised()) : h);
+		HELD.replaceAll(h -> h.owner().equals(player.getUUID()) ? new Held(h.entity(), h.owner(), h.origin(), h.pos(), h.yaw(), 0, h.ally(), h.excised()) : h);
 	}
 }

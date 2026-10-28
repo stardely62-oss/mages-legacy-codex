@@ -6,20 +6,22 @@ import euf.mageslegacy.race.RaceData;
 import euf.mageslegacy.race.Talents;
 import java.util.ArrayList;
 import java.util.List;
-import net.minecraft.entity.LivingEntity;
-import net.minecraft.entity.effect.StatusEffectInstance;
-import net.minecraft.entity.effect.StatusEffects;
-import net.minecraft.item.Item;
-import net.minecraft.item.ItemStack;
-import net.minecraft.registry.Registries;
-import net.minecraft.server.network.ServerPlayerEntity;
-import net.minecraft.server.world.ServerWorld;
-import net.minecraft.sound.SoundCategory;
-import net.minecraft.sound.SoundEvents;
-import net.minecraft.text.Text;
-import net.minecraft.util.Formatting;
-import net.minecraft.util.Identifier;
-import net.minecraft.util.math.random.Random;
+import java.util.Optional;
+import net.minecraft.ChatFormatting;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.network.chat.Component;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.sounds.SoundEvents;
+import net.minecraft.sounds.SoundSource;
+import net.minecraft.util.RandomSource;
+import net.minecraft.world.effect.MobEffectInstance;
+import net.minecraft.world.effect.MobEffects;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.player.Inventory;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemStack;
 
 /**
  * The board of the Mage's Shop. Every 20 minutes of play it offers a few contracts from the tiers the Mercenary has
@@ -124,8 +126,8 @@ public final class Contracts {
 		TEMPLATES.add(new Template(Contract.Kind.EXPLORE, "minecraft:" + id, 1, tier));
 	}
 
-	public static long today(ServerPlayerEntity player) {
-		return player.getServer().getOverworld().getTime() / DAY;
+	public static long today(ServerPlayer player) {
+		return player.getServer().overworld().getGameTime() / DAY;
 	}
 
 	public static int slots(RaceData data) {
@@ -137,7 +139,7 @@ public final class Contracts {
 	}
 
 	/** A new day: new offers on the board, new prices in the shop. */
-	public static void refresh(ServerPlayerEntity player, RaceData data) {
+	public static void refresh(ServerPlayer player, RaceData data) {
 		MercData merc = data.merc;
 		long today = today(player);
 		if (merc.day == today) {
@@ -151,10 +153,10 @@ public final class Contracts {
 	}
 
 	/** Lays out a fresh board. */
-	public static void fill(ServerPlayerEntity player, RaceData data) {
+	public static void fill(ServerPlayer player, RaceData data) {
 		MercData merc = data.merc;
 		merc.offers.clear();
-		Random random = player.getRandom();
+		RandomSource random = player.getRandom();
 		int maxTier = Progression.openTiers(player);
 		for (int i = 0; i < offerCount(data); i++) {
 			Contract c = roll(random, data, maxTier);
@@ -166,7 +168,7 @@ public final class Contracts {
 	}
 
 	/** One offer: mostly from the highest open tier, never the same job twice on the board or in hand. */
-	private static Contract roll(Random random, RaceData data, int maxTier) {
+	private static Contract roll(RandomSource random, RaceData data, int maxTier) {
 		int tier = maxTier > 1 && random.nextFloat() < 0.6f ? maxTier : 1 + random.nextInt(maxTier);
 		List<Template> pool = new ArrayList<>();
 		for (Template t : TEMPLATES) {
@@ -186,49 +188,49 @@ public final class Contracts {
 		return new Contract(t.kind(), t.target(), elite ? t.amount() * 2 : t.amount(), tier, elite, tokens, xp);
 	}
 
-	public static boolean accept(ServerPlayerEntity player, RaceData data, int index) {
+	public static boolean accept(ServerPlayer player, RaceData data, int index) {
 		MercData merc = data.merc;
 		if (index < 0 || index >= merc.offers.size()) {
 			return false;
 		}
 		if (merc.active.size() >= slots(data)) {
-			player.sendMessage(Text.translatable("mages_legacy.merc.no_slot", slots(data)), true);
+			player.displayClientMessage(Component.translatable("mages_legacy.merc.no_slot", slots(data)), true);
 			return false;
 		}
 		merc.active.add(merc.offers.remove(index));
 		data.dirty = true;
-		player.playSound(SoundEvents.ITEM_BOOK_PAGE_TURN, SoundCategory.PLAYERS, 1.0f, 1.1f);
+		player.playNotifySound(SoundEvents.BOOK_PAGE_TURN, SoundSource.PLAYERS, 1.0f, 1.1f);
 		return true;
 	}
 
-	public static boolean abandon(ServerPlayerEntity player, RaceData data, int index) {
+	public static boolean abandon(ServerPlayer player, RaceData data, int index) {
 		if (index < 0 || index >= data.merc.active.size()) {
 			return false;
 		}
 		data.merc.active.remove(index);
 		data.dirty = true;
-		player.playSound(SoundEvents.ITEM_BOOK_PUT, SoundCategory.PLAYERS, 1.0f, 0.7f);
+		player.playNotifySound(SoundEvents.BOOK_PUT, SoundSource.PLAYERS, 1.0f, 0.7f);
 		return true;
 	}
 
 	/** Hands over what a gathering contract asks for, as much as the inventory holds. */
-	public static boolean deliver(ServerPlayerEntity player, RaceData data, int index) {
+	public static boolean deliver(ServerPlayer player, RaceData data, int index) {
 		if (index < 0 || index >= data.merc.active.size()) {
 			return false;
 		}
 		Contract c = data.merc.active.get(index);
-		Identifier id = Identifier.tryParse(c.target);
+		ResourceLocation id = ResourceLocation.tryParse(c.target);
 		if (c.kind != Contract.Kind.GATHER || id == null) {
 			return false;
 		}
-		Item item = Registries.ITEM.get(id);
+		Item item = BuiltInRegistries.ITEM.get(id);
 		int need = c.amount - c.progress;
 		var inventory = player.getInventory();
-		for (int slot = 0; slot < inventory.size() && need > 0; slot++) {
-			ItemStack stack = inventory.getStack(slot);
-			if (stack.isOf(item)) {
+		for (int slot = 0; slot < inventory.getContainerSize() && need > 0; slot++) {
+			ItemStack stack = inventory.getItem(slot);
+			if (stack.is(item)) {
 				int take = Math.min(need, stack.getCount());
-				stack.decrement(take);
+				stack.shrink(take);
 				need -= take;
 				c.progress += take;
 			}
@@ -237,14 +239,14 @@ public final class Contracts {
 		if (c.done()) {
 			complete(player, data, c);
 		} else {
-			player.sendMessage(Text.translatable("mages_legacy.merc.delivered", c.progress, c.amount), true);
+			player.displayClientMessage(Component.translatable("mages_legacy.merc.delivered", c.progress, c.amount), true);
 		}
 		return true;
 	}
 
 	/** A creature killed by the Mercenary counts towards its hunts. */
-	public static void onKill(ServerPlayerEntity player, RaceData data, LivingEntity victim) {
-		String id = Registries.ENTITY_TYPE.getId(victim.getType()).toString();
+	public static void onKill(ServerPlayer player, RaceData data, LivingEntity victim) {
+		String id = BuiltInRegistries.ENTITY_TYPE.getKey(victim.getType()).toString();
 		for (Contract c : List.copyOf(data.merc.active)) {
 			if (c.kind == Contract.Kind.HUNT && c.target.equals(id) && !c.done()) {
 				c.progress += data.has(Talents.CON_BOUNTY) && player.getRandom().nextFloat() < 0.25f ? 2 : 1;
@@ -259,13 +261,13 @@ public final class Contracts {
 	}
 
 	/** Once a second: a land the Mercenary was sent to, reached. */
-	public static void tickSecond(ServerPlayerEntity player, RaceData data) {
+	public static void tickSecond(ServerPlayer player, RaceData data) {
 		refresh(player, data);
-		var biome = player.getServerWorld().getBiome(player.getBlockPos()).getKey();
+		var biome = player.serverLevel().getBiome(player.blockPosition()).unwrapKey();
 		if (biome.isEmpty()) {
 			return;
 		}
-		String here = biome.get().getValue().toString();
+		String here = biome.get().location().toString();
 		for (Contract c : List.copyOf(data.merc.active)) {
 			if (c.kind == Contract.Kind.EXPLORE && c.target.equals(here)) {
 				c.progress = c.amount;
@@ -275,21 +277,21 @@ public final class Contracts {
 	}
 
 	/** The pay: tokens into the Shop and race experience, the only kind a Mercenary gets. */
-	public static void complete(ServerPlayerEntity player, RaceData data, Contract c) {
+	public static void complete(ServerPlayer player, RaceData data, Contract c) {
 		data.merc.active.remove(c);
 		data.merc.tokens += c.tokens;
 		data.merc.completed++;
 		data.dirty = true;
-		player.sendMessage(Text.translatable("mages_legacy.merc.completed", c.tokens, c.xp).formatted(Formatting.GOLD), false);
+		player.displayClientMessage(Component.translatable("mages_legacy.merc.completed", c.tokens, c.xp).withStyle(ChatFormatting.GOLD), false);
 		Progression.addXp(player, data, c.xp);
-		ServerWorld world = player.getServerWorld();
-		world.playSound(null, player.getBlockPos(), SoundEvents.ENTITY_VILLAGER_YES, SoundCategory.PLAYERS, 0.6f, 0.8f);
-		world.playSound(null, player.getBlockPos(), SoundEvents.ENTITY_PLAYER_LEVELUP, SoundCategory.PLAYERS, 0.5f, 1.4f);
-		Fx.burst(world, player.getPos().add(0, 1, 0), 2.0f, 10, Mercenary.GOLD_RGB);
+		ServerLevel world = player.serverLevel();
+		world.playSound(null, player.blockPosition(), SoundEvents.VILLAGER_YES, SoundSource.PLAYERS, 0.6f, 0.8f);
+		world.playSound(null, player.blockPosition(), SoundEvents.PLAYER_LEVELUP, SoundSource.PLAYERS, 0.5f, 1.4f);
+		Fx.burst(world, player.position().add(0, 1, 0), 2.0f, 10, Mercenary.GOLD_RGB);
 		Fx.helix(world, player, 0.9f, 2.2f, 3, true, 18, Mercenary.GOLD_RGB);
 		if (data.has(Talents.CON_RUSH)) {
-			player.addStatusEffect(new StatusEffectInstance(StatusEffects.SPEED, 600, 1, true, true, true));
-			player.addStatusEffect(new StatusEffectInstance(StatusEffects.STRENGTH, 600, 0, true, true, true));
+			player.addEffect(new MobEffectInstance(MobEffects.MOVEMENT_SPEED, 600, 1, true, true, true));
+			player.addEffect(new MobEffectInstance(MobEffects.DAMAGE_BOOST, 600, 0, true, true, true));
 			player.heal(6);
 		}
 	}
@@ -302,16 +304,16 @@ public final class Contracts {
 		return 5 << Math.min(4, data.merc.rerolls);
 	}
 
-	public static boolean reroll(ServerPlayerEntity player, RaceData data) {
+	public static boolean reroll(ServerPlayer player, RaceData data) {
 		int price = Shop.discounted(data, rerollPrice(data));
 		if (data.merc.tokens < price) {
-			player.sendMessage(Text.translatable("mages_legacy.merc.no_tokens"), true);
+			player.displayClientMessage(Component.translatable("mages_legacy.merc.no_tokens"), true);
 			return false;
 		}
 		data.merc.tokens -= price;
 		data.merc.rerolls++;
 		fill(player, data);
-		player.playSound(SoundEvents.ITEM_BOOK_PAGE_TURN, SoundCategory.PLAYERS, 1.0f, 0.8f);
+		player.playNotifySound(SoundEvents.BOOK_PAGE_TURN, SoundSource.PLAYERS, 1.0f, 0.8f);
 		return true;
 	}
 }

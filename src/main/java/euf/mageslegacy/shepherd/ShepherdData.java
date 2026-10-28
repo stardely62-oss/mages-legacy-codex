@@ -7,9 +7,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
-import net.minecraft.nbt.NbtCompound;
-import net.minecraft.nbt.NbtElement;
-import net.minecraft.nbt.NbtList;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.ListTag;
+import net.minecraft.nbt.Tag;
 
 /**
  * What a Shepherd keeps: kills per mob type (the bestiary of echoes), the echo picked for the Call, the bonded beasts,
@@ -45,7 +45,7 @@ public class ShepherdData {
 		public int level = 1;
 		public int xp;
 		public long restingUntil;
-		public NbtCompound body;
+		public CompoundTag body;
 		/** Chosen in the bestiary to lead the pack (the Alpha crown). */
 		public boolean leader;
 		/** World time its last meal wears off (fed beasts heal and hit harder), when it was last petted. */
@@ -60,9 +60,9 @@ public class ShepherdData {
 			return body != null;
 		}
 
-		NbtCompound toNbt() {
-			NbtCompound nbt = new NbtCompound();
-			nbt.putUuid("entity", entity);
+		CompoundTag toNbt() {
+			CompoundTag nbt = new CompoundTag();
+			nbt.putUUID("entity", entity);
 			nbt.putString("kind", kind);
 			nbt.putString("name", name);
 			nbt.putInt("level", level);
@@ -79,9 +79,9 @@ public class ShepherdData {
 			return nbt;
 		}
 
-		static Bond fromNbt(NbtCompound nbt) {
+		static Bond fromNbt(CompoundTag nbt) {
 			Bond bond = new Bond();
-			bond.entity = nbt.getUuid("entity");
+			bond.entity = nbt.getUUID("entity");
 			bond.kind = nbt.getString("kind");
 			bond.name = nbt.getString("name");
 			bond.level = Math.max(1, nbt.getInt("level"));
@@ -129,28 +129,28 @@ public class ShepherdData {
 		rituals.clear();
 	}
 
-	public NbtCompound toNbt() {
-		NbtCompound nbt = new NbtCompound();
-		NbtCompound killNbt = new NbtCompound();
+	public CompoundTag toNbt() {
+		CompoundTag nbt = new CompoundTag();
+		CompoundTag killNbt = new CompoundTag();
 		kills.forEach(killNbt::putInt);
 		nbt.put("kills", killNbt);
 		nbt.putString("selected", selectedEcho);
-		NbtList presetList = new NbtList();
+		ListTag presetList = new ListTag();
 		for (Map<String, Integer> preset : presets) {
-			NbtCompound p = new NbtCompound();
+			CompoundTag p = new CompoundTag();
 			preset.forEach(p::putInt);
 			presetList.add(p);
 		}
 		nbt.put("presets", presetList);
 		nbt.putInt("activePreset", activePreset);
 		nbt.putInt("stance", stance);
-		NbtList bondList = new NbtList();
+		ListTag bondList = new ListTag();
 		bonds.forEach(b -> bondList.add(b.toNbt()));
 		nbt.put("bonds", bondList);
-		NbtList ritualList = new NbtList();
+		ListTag ritualList = new ListTag();
 		rituals.forEach((id, r) -> {
-			NbtCompound e = new NbtCompound();
-			e.putUuid("id", id);
+			CompoundTag e = new CompoundTag();
+			e.putUUID("id", id);
 			e.putLong("listenUntil", r.listenUntil);
 			e.putInt("feedings", r.feedings);
 			e.putLong("lastFeed", r.lastFeed);
@@ -162,34 +162,34 @@ public class ShepherdData {
 		return nbt;
 	}
 
-	public void readNbt(NbtCompound nbt) {
+	public void readNbt(CompoundTag nbt) {
 		clear();
-		NbtCompound killNbt = nbt.getCompound("kills");
-		for (String key : killNbt.getKeys()) {
+		CompoundTag killNbt = nbt.getCompound("kills");
+		for (String key : killNbt.getAllKeys()) {
 			kills.put(key, killNbt.getInt(key));
 		}
 		selectedEcho = nbt.getString("selected");
-		NbtList presetList = nbt.getList("presets", NbtElement.COMPOUND_TYPE);
+		ListTag presetList = nbt.getList("presets", Tag.TAG_COMPOUND);
 		for (int i = 0; i < presets.size() && i < presetList.size(); i++) {
-			NbtCompound p = presetList.getCompound(i);
-			for (String key : p.getKeys()) {
+			CompoundTag p = presetList.getCompound(i);
+			for (String key : p.getAllKeys()) {
 				presets.get(i).put(key, p.getInt(key));
 			}
 		}
 		activePreset = Math.floorMod(nbt.getInt("activePreset"), presets.size());
 		stance = nbt.contains("stance") ? Math.floorMod(nbt.getInt("stance"), 3) : GUARD;
-		for (NbtElement e : nbt.getList("bonds", NbtElement.COMPOUND_TYPE)) {
-			bonds.add(Bond.fromNbt((NbtCompound) e));
+		for (Tag e : nbt.getList("bonds", Tag.TAG_COMPOUND)) {
+			bonds.add(Bond.fromNbt((CompoundTag) e));
 		}
-		for (NbtElement e : nbt.getList("rituals", NbtElement.COMPOUND_TYPE)) {
-			NbtCompound c = (NbtCompound) e;
+		for (Tag e : nbt.getList("rituals", Tag.TAG_COMPOUND)) {
+			CompoundTag c = (CompoundTag) e;
 			Ritual r = new Ritual();
 			r.listenUntil = c.getLong("listenUntil");
 			r.feedings = c.getInt("feedings");
 			r.lastFeed = c.getLong("lastFeed");
 			r.note = c.getString("note");
 			r.kind = c.getString("kind");
-			rituals.put(c.getUuid("id"), r);
+			rituals.put(c.getUUID("id"), r);
 		}
 	}
 }

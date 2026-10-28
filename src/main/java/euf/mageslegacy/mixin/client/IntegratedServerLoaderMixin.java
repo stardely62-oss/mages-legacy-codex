@@ -1,6 +1,6 @@
 package euf.mageslegacy.mixin.client;
 
-import net.minecraft.server.integrated.IntegratedServerLoader;
+import net.minecraft.client.gui.screens.worldselection.WorldOpenFlows;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.ModifyVariable;
@@ -10,7 +10,7 @@ import org.spongepowered.asm.mixin.injection.ModifyVariable;
  * "experimental", asking about it on every load. Here that only means the pocket exists: the question is skipped.
  * Lenient (require 0): if the method ever changes, the old prompt simply comes back.
  */
-@Mixin(IntegratedServerLoader.class)
+@Mixin(WorldOpenFlows.class)
 public class IntegratedServerLoaderMixin {
 	/** Opening a world: no "experimental settings" prompt. */
 	@ModifyVariable(method = "start(Lnet/minecraft/client/gui/screen/Screen;Ljava/lang/String;ZZ)V", at = @At("HEAD"), argsOnly = true, ordinal = 1,

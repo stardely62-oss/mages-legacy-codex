@@ -1,5 +1,6 @@
 package euf.mageslegacy.client;
 
+import com.mojang.blaze3d.platform.InputConstants;
 import euf.mageslegacy.MagesLegacy;
 import euf.mageslegacy.client.screen.BestiaryScreen;
 import euf.mageslegacy.client.screen.LoreScreen;
@@ -17,34 +18,33 @@ import net.fabricmc.fabric.api.blockrenderlayer.v1.BlockRenderLayerMap;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
-import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
+import euf.mageslegacy.platform.Network.Client;
 import net.fabricmc.fabric.api.client.rendering.v1.HudRenderCallback;
 import net.fabricmc.fabric.api.client.rendering.v1.WorldRenderEvents;
-import net.fabricmc.fabric.api.networking.v1.PacketByteBufs;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.option.KeyBinding;
-import net.minecraft.client.render.RenderLayer;
-import net.minecraft.client.util.InputUtil;
-import net.minecraft.network.PacketByteBuf;
+import euf.mageslegacy.platform.Network;
+import net.minecraft.client.KeyMapping;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.renderer.RenderType;
+import net.minecraft.network.FriendlyByteBuf;
 import org.lwjgl.glfw.GLFW;
 
 public class MagesLegacyClient implements ClientModInitializer {
 	public static final String CATEGORY = "category.mages_legacy";
-	public static final KeyBinding[] ABILITY_KEYS = {
+	public static final KeyMapping[] ABILITY_KEYS = {
 			key("ability_1", GLFW.GLFW_KEY_R), key("ability_2", GLFW.GLFW_KEY_V), key("ability_3", GLFW.GLFW_KEY_Z), key("ability_4", GLFW.GLFW_KEY_H),
 			key("ability_5", GLFW.GLFW_KEY_LEFT_ALT)};
 	// Defaults clear of vanilla and of JourneyMap (which takes G, B, N, J, C, O, F, [, \, - and =)
-	public static final KeyBinding TREE_KEY = key("talents", GLFW.GLFW_KEY_K);
-	public static final KeyBinding BESTIARY_KEY = key("bestiary", GLFW.GLFW_KEY_U);
-	public static final KeyBinding SQUAD_KEY = key("next_squad", GLFW.GLFW_KEY_Y);
+	public static final KeyMapping TREE_KEY = key("talents", GLFW.GLFW_KEY_K);
+	public static final KeyMapping BESTIARY_KEY = key("bestiary", GLFW.GLFW_KEY_U);
+	public static final KeyMapping SQUAD_KEY = key("next_squad", GLFW.GLFW_KEY_Y);
 	private static boolean keysSettled;
 
 	/**
 	 * The key as printed on an English keyboard (R, V, G, H; Alt for either Alt), whatever layout the system has switched to: GLFW names
 	 * letter keys by the active layout, which turned R into К. Other keys keep their localized names.
 	 */
-	public static String keyLabel(KeyBinding binding) {
-		String key = binding.getBoundKeyTranslationKey();
+	public static String keyLabel(KeyMapping binding) {
+		String key = binding.saveString();
 		String prefix = "key.keyboard.";
 		if (key.startsWith(prefix) && key.length() == prefix.length() + 1) {
 			return key.substring(prefix.length()).toUpperCase(Locale.ROOT);
@@ -56,44 +56,44 @@ public class MagesLegacyClient implements ClientModInitializer {
 				return name.equals("control") ? "Ctrl" : name.substring(0, 1).toUpperCase(Locale.ROOT) + name.substring(1);
 			}
 		}
-		return binding.getBoundKeyLocalizedText().getString();
+		return binding.getTranslatedKeyMessage().getString();
 	}
 
-	private static KeyBinding key(String name, int code) {
-		return KeyBindingHelper.registerKeyBinding(new KeyBinding("key.mages_legacy." + name, InputUtil.Type.KEYSYM, code, CATEGORY));
+	private static KeyMapping key(String name, int code) {
+		return KeyBindingHelper.registerKeyBinding(new KeyMapping("key.mages_legacy." + name, InputConstants.Type.KEYSYM, code, CATEGORY));
 	}
 
 	@Override
 	public void onInitializeClient() {
-		BlockRenderLayerMap.INSTANCE.putBlock(MagesLegacy.MYCELIUM_NODE, RenderLayer.getCutout());
+		BlockRenderLayerMap.INSTANCE.putBlock(MagesLegacy.MYCELIUM_NODE, RenderType.cutout());
 		RaceParticles.register();
-		ClientPlayNetworking.registerGlobalReceiver(RacePackets.SYNC, (client, handler, buf, sender) -> {
-			PacketByteBuf copy = PacketByteBufs.copy(buf);
+		Client.registerGlobalReceiver(RacePackets.SYNC, (client, handler, buf, sender) -> {
+			FriendlyByteBuf copy = PacketByteBufs.copy(buf);
 			client.execute(() -> {
 				ClientRaceState.read(copy);
 				// The choice was made (here or by an operator): the lore and choice screens are done
-				if (ClientRaceState.race != null && (client.currentScreen instanceof LoreScreen || client.currentScreen instanceof RaceSelectScreen)) {
+				if (ClientRaceState.race != null && (client.screen instanceof LoreScreen || client.screen instanceof RaceSelectScreen)) {
 					client.setScreen(null);
 				}
 			});
 		});
-		ClientPlayNetworking.registerGlobalReceiver(RacePackets.ECHOES, (client, handler, buf, sender) -> {
-			PacketByteBuf copy = PacketByteBufs.copy(buf);
+		Client.registerGlobalReceiver(RacePackets.ECHOES, (client, handler, buf, sender) -> {
+			FriendlyByteBuf copy = PacketByteBufs.copy(buf);
 			client.execute(() -> EchoVisuals.read(copy));
 		});
-		ClientPlayNetworking.registerGlobalReceiver(RacePackets.FACES, (client, handler, buf, sender) -> {
-			PacketByteBuf copy = PacketByteBufs.copy(buf);
+		Client.registerGlobalReceiver(RacePackets.FACES, (client, handler, buf, sender) -> {
+			FriendlyByteBuf copy = PacketByteBufs.copy(buf);
 			client.execute(() -> FaceVisuals.read(copy));
 		});
-		ClientPlayNetworking.registerGlobalReceiver(RacePackets.QUICKENED, (client, handler, buf, sender) -> {
-			PacketByteBuf copy = PacketByteBufs.copy(buf);
+		Client.registerGlobalReceiver(RacePackets.QUICKENED, (client, handler, buf, sender) -> {
+			FriendlyByteBuf copy = PacketByteBufs.copy(buf);
 			client.execute(() -> QuickenVisuals.read(copy));
 		});
-		ClientPlayNetworking.registerGlobalReceiver(RacePackets.FX, (client, handler, buf, sender) -> {
-			PacketByteBuf copy = PacketByteBufs.copy(buf);
+		Client.registerGlobalReceiver(RacePackets.FX, (client, handler, buf, sender) -> {
+			FriendlyByteBuf copy = PacketByteBufs.copy(buf);
 			client.execute(() -> FxRenderer.read(copy));
 		});
-		ClientPlayNetworking.registerGlobalReceiver(RacePackets.OPEN_CHOICE, (client, handler, buf, sender) ->
+		Client.registerGlobalReceiver(RacePackets.OPEN_CHOICE, (client, handler, buf, sender) ->
 				client.execute(() -> client.setScreen(new LoreScreen())));
 		ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> client.execute(() -> {
 			ClientRaceState.clear();
@@ -109,7 +109,7 @@ public class MagesLegacyClient implements ClientModInitializer {
 		ClientTickEvents.END_CLIENT_TICK.register(MagesLegacyClient::tick);
 	}
 
-	private static void tick(MinecraftClient client) {
+	private static void tick(Minecraft client) {
 		ClientRaceState.tick();
 		FxRenderer.tick();
 		FaceVisuals.tick(client);
@@ -147,17 +147,17 @@ public class MagesLegacyClient implements ClientModInitializer {
 	}
 
 	/** Our keys, all of them. */
-	public static List<KeyBinding> ourKeys() {
-		List<KeyBinding> keys = new ArrayList<>(List.of(ABILITY_KEYS));
+	public static List<KeyMapping> ourKeys() {
+		List<KeyMapping> keys = new ArrayList<>(List.of(ABILITY_KEYS));
 		keys.addAll(List.of(TREE_KEY, BESTIARY_KEY, SQUAD_KEY));
 		return keys;
 	}
 
 	/** Other bindings (vanilla's or another mod's) on the same key as ours. */
-	public static List<KeyBinding> clashes(MinecraftClient client, KeyBinding ours) {
-		List<KeyBinding> list = new ArrayList<>();
-		for (KeyBinding other : client.options.allKeys) {
-			if (other != ours && !other.isUnbound() && !ours.isUnbound() && other.equals(ours) && !ourKeys().contains(other)) {
+	public static List<KeyMapping> clashes(Minecraft client, KeyMapping ours) {
+		List<KeyMapping> list = new ArrayList<>();
+		for (KeyMapping other : client.options.keyMappings) {
+			if (other != ours && !other.isUnbound() && !ours.isUnbound() && other.same(ours) && !ourKeys().contains(other)) {
 				list.add(other);
 			}
 		}
@@ -168,24 +168,24 @@ public class MagesLegacyClient implements ClientModInitializer {
 	 * Once a start: a key of ours that shares its key with another mod's (an older default, or a mod installed later)
 	 * goes back to our default when that one is free, so a modpack works without anyone opening the controls.
 	 */
-	private static void settleKeys(MinecraftClient client) {
+	private static void settleKeys(Minecraft client) {
 		boolean changed = false;
-		for (KeyBinding ours : ourKeys()) {
+		for (KeyMapping ours : ourKeys()) {
 			if (clashes(client, ours).isEmpty() || ours.isDefault()) {
 				continue;
 			}
-			KeyBinding probe = ours;
-			boolean defaultFree = java.util.Arrays.stream(client.options.allKeys)
+			KeyMapping probe = ours;
+			boolean defaultFree = java.util.Arrays.stream(client.options.keyMappings)
 					.noneMatch(other -> other != probe && KeyBindingHelper.getBoundKeyOf(other).equals(probe.getDefaultKey()));
 			if (defaultFree) {
-				MagesLegacy.LOGGER.info("Key {} clashed with another mod; back to its default {}", ours.getTranslationKey(), ours.getDefaultKey().getTranslationKey());
-				ours.setBoundKey(ours.getDefaultKey());
+				MagesLegacy.LOGGER.info("Key {} clashed with another mod; back to its default {}", ours.getName(), ours.getDefaultKey().getName());
+				ours.setKey(ours.getDefaultKey());
 				changed = true;
 			}
 		}
 		if (changed) {
-			KeyBinding.updateKeysByCode();
-			client.options.write();
+			KeyMapping.resetMapping();
+			client.options.save();
 		}
 	}
 
@@ -197,86 +197,86 @@ public class MagesLegacyClient implements ClientModInitializer {
 	 * (JourneyMap, say) binds the same key, ours never hears it: then the physical key itself is watched, and both mods
 	 * act on it. Not while a screen is open, so typing in the chat doesn't cast anything.
 	 */
-	private static boolean pressed(MinecraftClient client, KeyBinding binding, int index) {
+	private static boolean pressed(Minecraft client, KeyMapping binding, int index) {
 		boolean fired = false;
-		while (binding.wasPressed()) {
+		while (binding.consumeClick()) {
 			fired = true;
 		}
-		InputUtil.Key key = KeyBindingHelper.getBoundKeyOf(binding);
-		boolean down = key.getCategory() == InputUtil.Type.KEYSYM && key.getCode() != InputUtil.UNKNOWN_KEY.getCode()
-				&& InputUtil.isKeyPressed(client.getWindow().getHandle(), key.getCode());
+		InputConstants.Key key = KeyBindingHelper.getBoundKeyOf(binding);
+		boolean down = key.getType() == InputConstants.Type.KEYSYM && key.getValue() != InputConstants.UNKNOWN.getValue()
+				&& InputConstants.isKeyDown(client.getWindow().getWindow(), key.getValue());
 		boolean edge = down && !DOWN[index];
 		DOWN[index] = down;
-		return fired || (edge && client.currentScreen == null);
+		return fired || (edge && client.screen == null);
 	}
 
 	public static void useAbility(int slot) {
-		MinecraftClient client = MinecraftClient.getInstance();
+		Minecraft client = Minecraft.getInstance();
 		RaceHud.pressed(slot);
-		PacketByteBuf buf = PacketByteBufs.create();
+		FriendlyByteBuf buf = Network.create();
 		buf.writeVarInt(slot);
 		// Sneak as this client sees it, sent along: the server's idea of a crouch can lag behind the key
-		buf.writeBoolean(client.options.sneakKey.isPressed() || client.player != null && client.player.isSneaking());
-		ClientPlayNetworking.send(RacePackets.ABILITY, buf);
+		buf.writeBoolean(client.options.keyShift.isDown() || client.player != null && client.player.isShiftKeyDown());
+		Client.send(RacePackets.ABILITY, buf);
 	}
 
 	public static void sendChoice(String raceId) {
-		PacketByteBuf buf = PacketByteBufs.create();
-		buf.writeString(raceId);
-		ClientPlayNetworking.send(RacePackets.CHOOSE, buf);
+		FriendlyByteBuf buf = Network.create();
+		buf.writeUtf(raceId);
+		Client.send(RacePackets.CHOOSE, buf);
 	}
 
 	/** Makes squad {@code index} (wrapping around) the one the Call brings. */
 	public static void selectSquad(int index) {
 		int wrapped = Math.floorMod(index, 3);
 		ClientRaceState.extra.putInt("activePreset", wrapped);
-		PacketByteBuf buf = PacketByteBufs.create();
+		FriendlyByteBuf buf = Network.create();
 		buf.writeVarInt(0);
 		buf.writeVarInt(wrapped);
-		ClientPlayNetworking.send(RacePackets.PRESET, buf);
+		Client.send(RacePackets.PRESET, buf);
 	}
 
 	public static void renameBeast(int index, String name) {
-		PacketByteBuf buf = PacketByteBufs.create();
+		FriendlyByteBuf buf = Network.create();
 		buf.writeVarInt(0);
 		buf.writeVarInt(index);
-		buf.writeString(name);
-		ClientPlayNetworking.send(RacePackets.BEAST, buf);
+		buf.writeUtf(name);
+		Client.send(RacePackets.BEAST, buf);
 	}
 
 	public static void toggleLeader(int index) {
-		PacketByteBuf buf = PacketByteBufs.create();
+		FriendlyByteBuf buf = Network.create();
 		buf.writeVarInt(1);
 		buf.writeVarInt(index);
-		ClientPlayNetworking.send(RacePackets.BEAST, buf);
+		Client.send(RacePackets.BEAST, buf);
 	}
 
 	/** One more (+1) or one less (-1) echo of a kind in a squad. */
 	public static void editSquad(int index, String echo, int delta) {
-		PacketByteBuf buf = PacketByteBufs.create();
+		FriendlyByteBuf buf = Network.create();
 		buf.writeVarInt(1);
 		buf.writeVarInt(index);
-		buf.writeString(echo);
+		buf.writeUtf(echo);
 		buf.writeVarInt(delta);
-		ClientPlayNetworking.send(RacePackets.PRESET, buf);
+		Client.send(RacePackets.PRESET, buf);
 	}
 
 	/** The Mage's Shop: see {@link RacePackets#MERC}. */
 	public static void sendMerc(int action, int index, String ware) {
-		PacketByteBuf buf = PacketByteBufs.create();
+		FriendlyByteBuf buf = Network.create();
 		buf.writeVarInt(action);
 		if (action <= 2) {
 			buf.writeVarInt(index);
 		}
 		if (action == 4) {
-			buf.writeString(ware);
+			buf.writeUtf(ware);
 		}
-		ClientPlayNetworking.send(RacePackets.MERC, buf);
+		Client.send(RacePackets.MERC, buf);
 	}
 
 	public static void sendUnlock(String talent) {
-		PacketByteBuf buf = PacketByteBufs.create();
-		buf.writeString(talent);
-		ClientPlayNetworking.send(RacePackets.UNLOCK, buf);
+		FriendlyByteBuf buf = Network.create();
+		buf.writeUtf(talent);
+		Client.send(RacePackets.UNLOCK, buf);
 	}
 }

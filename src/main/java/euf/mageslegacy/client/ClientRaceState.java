@@ -5,10 +5,10 @@ import euf.mageslegacy.race.ClientRaceView;
 import euf.mageslegacy.race.Race;
 import java.util.HashSet;
 import java.util.Set;
-import net.minecraft.nbt.NbtCompound;
-import net.minecraft.nbt.NbtElement;
-import net.minecraft.nbt.NbtString;
-import net.minecraft.network.PacketByteBuf;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.StringTag;
+import net.minecraft.nbt.Tag;
+import net.minecraft.network.FriendlyByteBuf;
 
 /** The client's copy of its own race data, from the sync packet; cooldowns count down locally between syncs. */
 public final class ClientRaceState {
@@ -23,15 +23,15 @@ public final class ClientRaceState {
 	private static final int[] cooldowns = new int[AbilitySlots.COOLDOWNS];
 	public static int chainLeft;
 	/** Race extras from the sync: for Shepherds the capacity, bestiary kills, picked echo and bonds. */
-	public static NbtCompound extra = new NbtCompound();
+	public static CompoundTag extra = new CompoundTag();
 	private static long receivedAt;
 	private static long clientTicks;
 
 	private ClientRaceState() {
 	}
 
-	public static void read(PacketByteBuf buf) {
-		String id = buf.readString();
+	public static void read(FriendlyByteBuf buf) {
+		String id = buf.readUtf();
 		race = Race.byId(id).orElse(null);
 		ClientRaceView.race = race;
 		resource = buf.readFloat();
@@ -43,16 +43,16 @@ public final class ClientRaceState {
 		talents.clear();
 		int count = buf.readVarInt();
 		for (int i = 0; i < count; i++) {
-			talents.add(buf.readString());
+			talents.add(buf.readUtf());
 		}
 		for (int slot = 0; slot < AbilitySlots.COOLDOWNS; slot++) {
 			cooldowns[slot] = buf.readVarInt();
 		}
 		chainLeft = buf.readVarInt();
-		NbtCompound nbt = buf.readNbt();
-		extra = nbt == null ? new NbtCompound() : nbt;
+		CompoundTag nbt = buf.readNbt();
+		extra = nbt == null ? new CompoundTag() : nbt;
 		ClientRaceView.climbs = race == Race.MASKED && ("spider".equals(extra.getString("face"))
-				|| extra.getBoolean("thousand") && extra.getList("gallery", NbtElement.STRING_TYPE).contains(NbtString.of("spider")));
+				|| extra.getBoolean("thousand") && extra.getList("gallery", Tag.TAG_STRING).contains(StringTag.valueOf("spider")));
 		receivedAt = clientTicks;
 	}
 

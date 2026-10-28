@@ -13,36 +13,36 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-import net.minecraft.entity.Entity;
-import net.minecraft.entity.LivingEntity;
-import net.minecraft.entity.attribute.EntityAttributeInstance;
-import net.minecraft.entity.attribute.EntityAttributeModifier;
-import net.minecraft.entity.attribute.EntityAttributes;
-import net.minecraft.entity.damage.DamageSource;
-import net.minecraft.entity.damage.DamageTypes;
-import net.minecraft.entity.effect.StatusEffect;
-import net.minecraft.entity.effect.StatusEffectInstance;
-import net.minecraft.entity.effect.StatusEffects;
-import net.minecraft.entity.mob.MobEntity;
-import net.minecraft.entity.mob.Monster;
-import net.minecraft.entity.passive.IronGolemEntity;
-import net.minecraft.entity.passive.TameableEntity;
-import net.minecraft.entity.passive.VillagerEntity;
-import net.minecraft.entity.player.PlayerEntity;
-import net.minecraft.entity.projectile.ProjectileUtil;
-import net.minecraft.nbt.NbtCompound;
-import net.minecraft.particle.ParticleTypes;
-import net.minecraft.registry.tag.DamageTypeTags;
+import net.minecraft.ChatFormatting;
+import net.minecraft.core.particles.ParticleTypes;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
-import net.minecraft.server.network.ServerPlayerEntity;
-import net.minecraft.server.world.ServerWorld;
-import net.minecraft.sound.SoundCategory;
-import net.minecraft.sound.SoundEvents;
-import net.minecraft.text.Text;
-import net.minecraft.util.Formatting;
-import net.minecraft.util.hit.EntityHitResult;
-import net.minecraft.util.math.Box;
-import net.minecraft.util.math.Vec3d;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.sounds.SoundEvents;
+import net.minecraft.sounds.SoundSource;
+import net.minecraft.tags.DamageTypeTags;
+import net.minecraft.world.damagesource.DamageSource;
+import net.minecraft.world.damagesource.DamageTypes;
+import net.minecraft.world.effect.MobEffect;
+import net.minecraft.world.effect.MobEffectInstance;
+import net.minecraft.world.effect.MobEffects;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.Mob;
+import net.minecraft.world.entity.TamableAnimal;
+import net.minecraft.world.entity.ai.attributes.AttributeInstance;
+import net.minecraft.world.entity.ai.attributes.AttributeModifier;
+import net.minecraft.world.entity.ai.attributes.Attributes;
+import net.minecraft.world.entity.animal.IronGolem;
+import net.minecraft.world.entity.monster.Enemy;
+import net.minecraft.world.entity.npc.Villager;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.entity.projectile.ProjectileUtil;
+import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.EntityHitResult;
+import net.minecraft.world.phys.Vec3;
 
 /**
  * The Tempters: the nameless mage's longing to be loved, a hunter that lives by the kiss. The Kiss (R) rushes in,
@@ -112,39 +112,39 @@ public final class Tempter {
 		LAST_COMPANY.clear();
 	}
 
-	public static boolean is(PlayerEntity player) {
-		return player instanceof ServerPlayerEntity sp && RaceState.raceOf(sp).orElse(null) == Race.TEMPTER;
+	public static boolean is(Player player) {
+		return player instanceof ServerPlayer sp && RaceState.raceOf(sp).orElse(null) == Race.TEMPTER;
 	}
 
 	private static long now(MinecraftServer server) {
-		return server.getTicks();
+		return server.getTickCount();
 	}
 
-	private static boolean ready(ServerPlayerEntity player, RaceData data, int slot) {
+	private static boolean ready(ServerPlayer player, RaceData data, int slot) {
 		return data.readyAt.getOrDefault(slot, 0L) <= now(player.getServer());
 	}
 
-	private static void cooldown(ServerPlayerEntity player, RaceData data, int slot, int ticks) {
+	private static void cooldown(ServerPlayer player, RaceData data, int slot, int ticks) {
 		data.readyAt.put(slot, now(player.getServer()) + ticks);
 		data.dirty = true;
 	}
 
 	/** Whether a creature has a heart to win: no undead, no golems, no players. */
 	public static boolean hearted(LivingEntity e) {
-		return !e.isUndead() && !(e instanceof IronGolemEntity) && !(e instanceof PlayerEntity);
+		return !e.isInvertedHealAndHarm() && !(e instanceof IronGolem) && !(e instanceof Player);
 	}
 
 	private static boolean held(Map<UUID, Spell> spells, Entity mob, long now) {
-		Spell spell = spells.get(mob.getUuid());
+		Spell spell = spells.get(mob.getUUID());
 		return spell != null && spell.until() > now;
 	}
 
-	private static boolean heldBy(Map<UUID, Spell> spells, Entity mob, PlayerEntity tempter, long now) {
-		Spell spell = spells.get(mob.getUuid());
-		return spell != null && spell.until() > now && spell.tempter().equals(tempter.getUuid());
+	private static boolean heldBy(Map<UUID, Spell> spells, Entity mob, Player tempter, long now) {
+		Spell spell = spells.get(mob.getUUID());
+		return spell != null && spell.until() > now && spell.tempter().equals(tempter.getUUID());
 	}
 
-	public static boolean infatuated(Entity mob, PlayerEntity tempter) {
+	public static boolean infatuated(Entity mob, Player tempter) {
 		return mob.getServer() != null && heldBy(INFATUATED, mob, tempter, now(mob.getServer()));
 	}
 
@@ -157,7 +157,7 @@ public final class Tempter {
 	}
 
 	/** Whether a creature leaves this player be: a sleeper and a thrall touch no one, the infatuated not their Tempter. */
-	public static boolean blocksTarget(MobEntity mob, PlayerEntity target) {
+	public static boolean blocksTarget(Mob mob, Player target) {
 		if (mob.getServer() == null) {
 			return false;
 		}
@@ -165,69 +165,69 @@ public final class Tempter {
 		return held(ASLEEP, mob, now) || held(THRALLS, mob, now) || heldBy(INFATUATED, mob, target, now);
 	}
 
-	private static boolean night(ServerWorld world) {
-		return world.isNight() || world.getDimension().hasFixedTime();
+	private static boolean night(ServerLevel world) {
+		return world.isNight() || world.dimensionType().hasFixedTime();
 	}
 
 	// ---- once a second ----
 
-	public static void tickSecond(ServerPlayerEntity player, RaceData data) {
-		ServerWorld world = player.getServerWorld();
+	public static void tickSecond(ServerPlayer player, RaceData data) {
+		ServerLevel world = player.serverLevel();
 		long now = now(player.getServer());
 		// Adoration: a slow trickle of her own, more from every heart she holds and every friendly face near
 		int won = 0;
-		for (MobEntity m : world.getEntitiesByClass(MobEntity.class, player.getBoundingBox().expand(16), m -> m.isAlive())) {
+		for (Mob m : world.getEntitiesOfClass(Mob.class, player.getBoundingBox().inflate(16), m -> m.isAlive())) {
 			if (heldBy(INFATUATED, m, player, now) || heldBy(THRALLS, m, player, now)) {
 				won++;
 			}
 			if (heldBy(ASLEEP, m, player, now) && data.has(Talents.SLEEP_DREAM)) {
 				// Sweet Dreams: the sleepers pay for their dreams
-				m.damage(world.getDamageSources().indirectMagic(player, player), 1);
+				m.hurt(world.damageSources().indirectMagic(player, player), 1);
 				won++;
 			}
 		}
-		int friends = world.getEntitiesByClass(LivingEntity.class, player.getBoundingBox().expand(16),
-				e -> e != player && e.isAlive() && (e instanceof PlayerEntity || e instanceof VillagerEntity)).size();
-		boolean company = won > 0 || friends > 0 || !world.getEntitiesByClass(LivingEntity.class, player.getBoundingBox().expand(16),
-				e -> e != player && e.isAlive() && !(e instanceof net.minecraft.entity.decoration.ArmorStandEntity)).isEmpty();
+		int friends = world.getEntitiesOfClass(LivingEntity.class, player.getBoundingBox().inflate(16),
+				e -> e != player && e.isAlive() && (e instanceof Player || e instanceof Villager)).size();
+		boolean company = won > 0 || friends > 0 || !world.getEntitiesOfClass(LivingEntity.class, player.getBoundingBox().inflate(16),
+				e -> e != player && e.isAlive() && !(e instanceof net.minecraft.world.entity.decoration.ArmorStand)).isEmpty();
 		if (company) {
-			LAST_COMPANY.put(player.getUuid(), now);
+			LAST_COMPANY.put(player.getUUID(), now);
 		}
-		long alone = now - LAST_COMPANY.computeIfAbsent(player.getUuid(), id -> now);
+		long alone = now - LAST_COMPANY.computeIfAbsent(player.getUUID(), id -> now);
 		float gain = 0.4f + won * 0.4f + friends * 0.3f;
 		if (alone > LONELY_AFTER) {
 			gain = -0.5f;
-			refresh(player, StatusEffects.WEAKNESS, 0);
+			refresh(player, MobEffects.WEAKNESS, 0);
 		}
 		data.addResource(gain);
 
 		// Frail: two hearts short of a plain human
-		EntityAttributeInstance health = player.getAttributeInstance(EntityAttributes.GENERIC_MAX_HEALTH);
+		AttributeInstance health = player.getAttribute(Attributes.MAX_HEALTH);
 		if (health != null && health.getModifier(FRAIL_HEALTH) == null) {
-			health.addTemporaryModifier(new EntityAttributeModifier(FRAIL_HEALTH, "tempter_frail", -4, EntityAttributeModifier.Operation.ADDITION));
+			health.addTransientModifier(new AttributeModifier(FRAIL_HEALTH, "tempter_frail", -4, AttributeModifier.Operation.ADDITION));
 			player.setHealth(Math.min(player.getHealth(), player.getMaxHealth()));
 		}
 		// Night Huntress: quicker under the moon
-		EntityAttributeInstance speed = player.getAttributeInstance(EntityAttributes.GENERIC_MOVEMENT_SPEED);
+		AttributeInstance speed = player.getAttribute(Attributes.MOVEMENT_SPEED);
 		boolean nightSpeed = data.has(Talents.WING_NIGHT) && night(world);
 		if (speed != null && nightSpeed != (speed.getModifier(NIGHT_SPEED) != null)) {
 			if (nightSpeed) {
-				speed.addTemporaryModifier(new EntityAttributeModifier(NIGHT_SPEED, "tempter_night", 0.1, EntityAttributeModifier.Operation.MULTIPLY_BASE));
+				speed.addTransientModifier(new AttributeModifier(NIGHT_SPEED, "tempter_night", 0.1, AttributeModifier.Operation.MULTIPLY_BASE));
 			} else {
 				speed.removeModifier(NIGHT_SPEED);
 			}
 		}
 		// Village golems can't stand a Tempter
-		for (IronGolemEntity golem : world.getEntitiesByClass(IronGolemEntity.class, player.getBoundingBox().expand(16),
+		for (IronGolem golem : world.getEntitiesOfClass(IronGolem.class, player.getBoundingBox().inflate(16),
 				g -> g.isAlive() && !g.isPlayerCreated() && g.getTarget() == null)) {
 			golem.setTarget(player);
 		}
 	}
 
-	private static void refresh(ServerPlayerEntity player, StatusEffect effect, int amplifier) {
-		StatusEffectInstance current = player.getStatusEffect(effect);
+	private static void refresh(ServerPlayer player, MobEffect effect, int amplifier) {
+		MobEffectInstance current = player.getEffect(effect);
 		if (current == null || current.getDuration() <= 30) {
-			player.addStatusEffect(new StatusEffectInstance(effect, 60, amplifier, true, false, true));
+			player.addEffect(new MobEffectInstance(effect, 60, amplifier, true, false, true));
 		}
 	}
 
@@ -242,22 +242,22 @@ public final class Tempter {
 			if (e.getValue().until() >= now) {
 				return false;
 			}
-			ServerPlayerEntity tempter = server.getPlayerManager().getPlayer(e.getValue().tempter());
+			ServerPlayer tempter = server.getPlayerList().getPlayer(e.getValue().tempter());
 			if (tempter != null && RaceState.of(tempter).has(Talents.CHARM_HEART)) {
-				INFATUATED.put(e.getKey(), new Spell(tempter.getUuid(), now + 200));
+				INFATUATED.put(e.getKey(), new Spell(tempter.getUUID(), now + 200));
 				RaceState.of(tempter).addResource(10);
 			}
 			return true;
 		});
-		for (ServerPlayerEntity player : server.getPlayerManager().getPlayerList()) {
+		for (ServerPlayer player : server.getPlayerList().getPlayers()) {
 			// Gliding Wings: held crouching in the air, she glides
-			if (player.isSneaking() && !player.isOnGround() && player.getVelocity().y < 0 && is(player) && RaceState.of(player).has(Talents.WING_GLIDE)) {
-				player.addStatusEffect(new StatusEffectInstance(StatusEffects.SLOW_FALLING, 10, 0, true, false, false));
+			if (player.isShiftKeyDown() && !player.onGround() && player.getDeltaMovement().y < 0 && is(player) && RaceState.of(player).has(Talents.WING_GLIDE)) {
+				player.addEffect(new MobEffectInstance(MobEffects.SLOW_FALLING, 10, 0, true, false, false));
 			}
-			Long flew = WINGS.get(player.getUuid());
+			Long flew = WINGS.get(player.getUUID());
 			// Swooping Dive: the first landing after the Wings shakes the ground
-			if (flew != null && now - flew > 4 && now - flew < 80 && player.isOnGround() && is(player)) {
-				WINGS.remove(player.getUuid());
+			if (flew != null && now - flew > 4 && now - flew < 80 && player.onGround() && is(player)) {
+				WINGS.remove(player.getUUID());
 				if (RaceState.of(player).has(Talents.WING_DIVE)) {
 					dive(player, RaceState.of(player));
 				}
@@ -272,14 +272,14 @@ public final class Tempter {
 	}
 
 	private static void holdSleepers(MinecraftServer server, long now) {
-		for (ServerWorld world : server.getWorlds()) {
+		for (ServerLevel world : server.getAllLevels()) {
 			for (Map.Entry<UUID, Spell> e : ASLEEP.entrySet()) {
-				if (world.getEntity(e.getKey()) instanceof MobEntity mob && mob.isAlive()) {
+				if (world.getEntity(e.getKey()) instanceof Mob mob && mob.isAlive()) {
 					mob.setTarget(null);
 					mob.getNavigation().stop();
-					mob.addStatusEffect(new StatusEffectInstance(StatusEffects.SLOWNESS, 10, 9, true, false));
+					mob.addEffect(new MobEffectInstance(MobEffects.MOVEMENT_SLOWDOWN, 10, 9, true, false));
 					if (now % 20 == 0) {
-						world.spawnParticles(ParticleTypes.NOTE, mob.getX(), mob.getY() + mob.getHeight() + 0.3, mob.getZ(), 1, 0.2, 0, 0.2, 0.5);
+						world.sendParticles(ParticleTypes.NOTE, mob.getX(), mob.getY() + mob.getBbHeight() + 0.3, mob.getZ(), 1, 0.2, 0, 0.2, 0.5);
 					}
 				}
 			}
@@ -288,29 +288,29 @@ public final class Tempter {
 
 	/** Thralls turn on the nearest monster that isn't another of hers, and keep near her otherwise. */
 	private static void leadThralls(MinecraftServer server, long now) {
-		for (ServerWorld world : server.getWorlds()) {
+		for (ServerLevel world : server.getAllLevels()) {
 			for (Map.Entry<UUID, Spell> e : THRALLS.entrySet()) {
-				if (!(world.getEntity(e.getKey()) instanceof MobEntity mob) || !mob.isAlive()) {
+				if (!(world.getEntity(e.getKey()) instanceof Mob mob) || !mob.isAlive()) {
 					continue;
 				}
-				ServerPlayerEntity tempter = server.getPlayerManager().getPlayer(e.getValue().tempter());
-				if (tempter == null || tempter.getWorld() != world) {
+				ServerPlayer tempter = server.getPlayerList().getPlayer(e.getValue().tempter());
+				if (tempter == null || tempter.level() != world) {
 					continue;
 				}
 				LivingEntity target = mob.getTarget();
-				if (target == null || !target.isAlive() || target instanceof PlayerEntity || held(THRALLS, target, now)) {
-					LivingEntity rival = world.getEntitiesByClass(MobEntity.class, mob.getBoundingBox().expand(12),
-							o -> o != mob && o.isAlive() && o instanceof Monster && !held(THRALLS, o, now) && !held(ASLEEP, o, now)).stream()
-							.min(Comparator.comparingDouble(o -> o.squaredDistanceTo(mob))).orElse(null);
+				if (target == null || !target.isAlive() || target instanceof Player || held(THRALLS, target, now)) {
+					LivingEntity rival = world.getEntitiesOfClass(Mob.class, mob.getBoundingBox().inflate(12),
+							o -> o != mob && o.isAlive() && o instanceof Enemy && !held(THRALLS, o, now) && !held(ASLEEP, o, now)).stream()
+							.min(Comparator.comparingDouble(o -> o.distanceToSqr(mob))).orElse(null);
 					mob.setTarget(rival);
-					if (rival == null && mob.squaredDistanceTo(tempter) > 64) {
-						mob.getNavigation().startMovingTo(tempter, 1.2);
+					if (rival == null && mob.distanceToSqr(tempter) > 64) {
+						mob.getNavigation().moveTo(tempter, 1.2);
 					}
 				}
 				// Bait: the monsters around the thrall go for it, not for her
 				if (RaceState.of(tempter).has(Talents.CHARM_LURE)) {
-					for (MobEntity other : world.getEntitiesByClass(MobEntity.class, mob.getBoundingBox().expand(8),
-							o -> o != mob && o.isAlive() && o instanceof Monster && o.getTarget() == tempter && !held(THRALLS, o, now))) {
+					for (Mob other : world.getEntitiesOfClass(Mob.class, mob.getBoundingBox().inflate(8),
+							o -> o != mob && o.isAlive() && o instanceof Enemy && o.getTarget() == tempter && !held(THRALLS, o, now))) {
 						other.setTarget(mob);
 					}
 				}
@@ -320,7 +320,7 @@ public final class Tempter {
 
 	// ---- abilities ----
 
-	public static AbilityResult use(ServerPlayerEntity player, RaceData data, int slot) {
+	public static AbilityResult use(ServerPlayer player, RaceData data, int slot) {
 		return switch (slot) {
 			case 0 -> kiss(player, data);
 			case 1 -> wings(player, data);
@@ -347,8 +347,8 @@ public final class Tempter {
 		return data.has(Talents.KISS_REACH) ? 12 : 8;
 	}
 
-	private static boolean justFlew(ServerPlayerEntity player) {
-		Long flew = WINGS.get(player.getUuid());
+	private static boolean justFlew(ServerPlayer player) {
+		Long flew = WINGS.get(player.getUUID());
 		return flew != null && now(player.getServer()) - flew <= AFTER_WINGS;
 	}
 
@@ -357,7 +357,7 @@ public final class Tempter {
 	 * from a sleeper, half again by night with the Succubus crown); it stays infatuated for 6 seconds. No heart, no kiss.
 	 * With Kiss of Life, R at a player heals them instead.
 	 */
-	public static AbilityResult kiss(ServerPlayerEntity player, RaceData data) {
+	public static AbilityResult kiss(ServerPlayer player, RaceData data) {
 		if (!ready(player, data, 0)) {
 			return AbilityResult.COOLDOWN;
 		}
@@ -366,26 +366,26 @@ public final class Tempter {
 		if (data.resource < cost) {
 			return AbilityResult.NO_RESOURCE;
 		}
-		LivingEntity target = lookedAt(player, kissReach(data), e -> !(e instanceof TameableEntity tame && tame.isTamed())
-				&& (data.has(Talents.KISS_ALLY) || !(e instanceof PlayerEntity)));
+		LivingEntity target = lookedAt(player, kissReach(data), e -> !(e instanceof TamableAnimal tame && tame.isTame())
+				&& (data.has(Talents.KISS_ALLY) || !(e instanceof Player)));
 		if (target == null) {
 			return AbilityResult.NO_SIGHT;
 		}
-		ServerWorld world = player.getServerWorld();
+		ServerLevel world = player.serverLevel();
 		boolean moon = data.has(Talents.WING_SUCCUBUS) && night(world);
 		int cd = data.has(Talents.KISS_QUICK) ? KISS_COOLDOWN_QUICK : KISS_COOLDOWN;
-		if (target instanceof PlayerEntity friend) {
+		if (target instanceof Player friend) {
 			data.addResource(-cost);
 			cooldown(player, data, 0, moon ? cd * 3 / 4 : cd);
 			friend.heal(6);
-			friend.addStatusEffect(new StatusEffectInstance(StatusEffects.REGENERATION, 100, 0, true, true, true));
+			friend.addEffect(new MobEffectInstance(MobEffects.REGENERATION, 100, 0, true, true, true));
 			Fx.hearts(world, player, friend, 6, 24, ROSE_RGB);
-			world.spawnParticles(ParticleTypes.HEART, friend.getX(), friend.getY() + friend.getHeight() + 0.2, friend.getZ(), 4, 0.3, 0.2, 0.3, 0);
-			world.playSound(null, player.getBlockPos(), SoundEvents.ENTITY_ALLAY_ITEM_GIVEN, SoundCategory.PLAYERS, 1.0f, 1.2f);
+			world.sendParticles(ParticleTypes.HEART, friend.getX(), friend.getY() + friend.getBbHeight() + 0.2, friend.getZ(), 4, 0.3, 0.2, 0.3, 0);
+			world.playSound(null, player.blockPosition(), SoundEvents.ALLAY_ITEM_GIVEN, SoundSource.PLAYERS, 1.0f, 1.2f);
 			return AbilityResult.OK;
 		}
 		if (!hearted(target)) {
-			player.sendMessage(Text.translatable("mages_legacy.tempter.no_heart"), true);
+			player.displayClientMessage(Component.translatable("mages_legacy.tempter.no_heart"), true);
 			return AbilityResult.HINTED;
 		}
 		data.addResource(-cost);
@@ -393,39 +393,39 @@ public final class Tempter {
 		long now = now(player.getServer());
 		boolean sleeper = held(ASLEEP, target, now);
 		// The rush: up to the creature's side
-		Vec3d side = target.getPos().add(player.getPos().subtract(target.getPos()).normalize().multiply(target.getWidth() / 2 + 0.8));
-		Vec3d from = player.getPos();
-		player.requestTeleport(side.x, target.getY(), side.z);
+		Vec3 side = target.position().add(player.position().subtract(target.position()).normalize().scale(target.getBbWidth() / 2 + 0.8));
+		Vec3 from = player.position();
+		player.teleportTo(side.x, target.getY(), side.z);
 		float drain = (data.has(Talents.KISS_DEEP) ? 9 : 6) * (sleeper ? 2 : 1) * (moon ? 1.5f : 1);
-		target.damage(world.getDamageSources().indirectMagic(player, player), drain);
+		target.hurt(world.damageSources().indirectMagic(player, player), drain);
 		player.heal(drain);
 		// The kiss doesn't wake a sleeper: it deepens the dream into love
-		INFATUATED.put(target.getUuid(), new Spell(player.getUuid(), now + (data.has(Talents.KISS_CHARM) ? INFATUATION_TICKS_LONG : INFATUATION_TICKS)));
-		if (target instanceof MobEntity mob && mob.getTarget() == player) {
+		INFATUATED.put(target.getUUID(), new Spell(player.getUUID(), now + (data.has(Talents.KISS_CHARM) ? INFATUATION_TICKS_LONG : INFATUATION_TICKS)));
+		if (target instanceof Mob mob && mob.getTarget() == player) {
 			mob.setTarget(null);
 		}
 		if (data.has(Talents.KISS_POISON)) {
-			target.addStatusEffect(new StatusEffectInstance(StatusEffects.POISON, 80, 1));
+			target.addEffect(new MobEffectInstance(MobEffects.POISON, 80, 1));
 		}
 		if (data.has(Talents.KISS_SHIELD)) {
 			player.setAbsorptionAmount(Math.min(8, player.getAbsorptionAmount() + 4));
 		}
 		if (data.has(Talents.KISS_SHARE)) {
-			for (PlayerEntity friend : world.getEntitiesByClass(PlayerEntity.class, player.getBoundingBox().expand(6), p -> p != player && p.isAlive())) {
+			for (Player friend : world.getEntitiesOfClass(Player.class, player.getBoundingBox().inflate(6), p -> p != player && p.isAlive())) {
 				friend.heal(drain / 2);
 			}
 		}
 		if (data.has(Talents.WING_RUSH)) {
-			player.addStatusEffect(new StatusEffectInstance(StatusEffects.SPEED, 60, 1, true, true, true));
+			player.addEffect(new MobEffectInstance(MobEffects.MOVEMENT_SPEED, 60, 1, true, true, true));
 		}
 		Progression.addXp(player, data, "tempter_kiss", 1, 30);
 		// A rose streak where she went; over the kissed a heart beats once, and its life flows to her as little hearts
-		Fx.ribbon(world, List.of(from, player.getPos()), 12, WINE_INK, ROSE_RGB, 1.0f);
+		Fx.ribbon(world, List.of(from, player.position()), 12, WINE_INK, ROSE_RGB, 1.0f);
 		Fx.hearts(world, target, player, sleeper ? 10 : 6, 24, ROSE_RGB);
 		Fx.pulse(player, 2, 20, ROSE_RGB);
-		world.spawnParticles(ParticleTypes.HEART, target.getX(), target.getY() + target.getHeight() + 0.2, target.getZ(), sleeper ? 6 : 3, 0.3, 0.2, 0.3, 0);
-		world.playSound(null, player.getBlockPos(), SoundEvents.ENTITY_GENERIC_DRINK, SoundCategory.PLAYERS, 0.8f, 1.5f);
-		world.playSound(null, player.getBlockPos(), SoundEvents.ENTITY_ALLAY_AMBIENT_WITH_ITEM, SoundCategory.PLAYERS, 1.0f, 0.7f);
+		world.sendParticles(ParticleTypes.HEART, target.getX(), target.getY() + target.getBbHeight() + 0.2, target.getZ(), sleeper ? 6 : 3, 0.3, 0.2, 0.3, 0);
+		world.playSound(null, player.blockPosition(), SoundEvents.GENERIC_DRINK, SoundSource.PLAYERS, 0.8f, 1.5f);
+		world.playSound(null, player.blockPosition(), SoundEvents.ALLAY_AMBIENT_WITH_ITEM, SoundSource.PLAYERS, 1.0f, 0.7f);
 		return AbilityResult.OK;
 	}
 
@@ -433,9 +433,9 @@ public final class Tempter {
 	 * The Wings (V): a leap through the air the way she looks, and a slow fall after. With Second Flight the next one
 	 * within 3 seconds is free.
 	 */
-	public static AbilityResult wings(ServerPlayerEntity player, RaceData data) {
+	public static AbilityResult wings(ServerPlayer player, RaceData data) {
 		long now = now(player.getServer());
-		boolean second = data.has(Talents.WING_TWICE) && justFlew(player) && SECOND_FLIGHT.getOrDefault(player.getUuid(), false);
+		boolean second = data.has(Talents.WING_TWICE) && justFlew(player) && SECOND_FLIGHT.getOrDefault(player.getUUID(), false);
 		if (!second && !ready(player, data, 1)) {
 			return AbilityResult.COOLDOWN;
 		}
@@ -443,54 +443,54 @@ public final class Tempter {
 		if (data.resource < cost) {
 			return AbilityResult.NO_RESOURCE;
 		}
-		ServerWorld world = player.getServerWorld();
+		ServerLevel world = player.serverLevel();
 		data.addResource(-cost);
 		if (!second) {
 			int cd = data.has(Talents.WING_NIGHT) && night(world) ? WINGS_COOLDOWN / 2 : WINGS_COOLDOWN;
 			cooldown(player, data, 1, cd);
 		}
-		SECOND_FLIGHT.put(player.getUuid(), !second);
-		WINGS.put(player.getUuid(), now);
-		Vec3d look = player.getRotationVec(1.0f);
+		SECOND_FLIGHT.put(player.getUUID(), !second);
+		WINGS.put(player.getUUID(), now);
+		Vec3 look = player.getViewVector(1.0f);
 		double power = data.has(Talents.WING_FAR) ? 1.6 : 1.2;
-		Vec3d flat = new Vec3d(look.x, 0, look.z);
-		flat = flat.lengthSquared() < 1.0E-4 ? Vec3d.ZERO : flat.normalize();
-		player.setVelocity(flat.x * power, 0.55 + Math.max(0, look.y) * 0.5, flat.z * power);
-		player.velocityModified = true;
+		Vec3 flat = new Vec3(look.x, 0, look.z);
+		flat = flat.lengthSqr() < 1.0E-4 ? Vec3.ZERO : flat.normalize();
+		player.setDeltaMovement(flat.x * power, 0.55 + Math.max(0, look.y) * 0.5, flat.z * power);
+		player.hurtMarked = true;
 		player.fallDistance = 0;
-		player.addStatusEffect(new StatusEffectInstance(StatusEffects.SLOW_FALLING, 50, 0, true, false, true));
+		player.addEffect(new MobEffectInstance(MobEffects.SLOW_FALLING, 50, 0, true, false, true));
 		// Dark wings unfold from her back and beat once; the air rings where she sprang
 		Fx.wings(world, player, 1.5f, 36, ROSE_RGB);
-		Fx.ring(world, player.getPos(), 0.4f, 3.0f, 10, ROSE_RGB);
+		Fx.ring(world, player.position(), 0.4f, 3.0f, 10, ROSE_RGB);
 		Fx.fov(player, 0.15f, 10);
-		world.playSound(null, player.getBlockPos(), SoundEvents.ENTITY_ENDER_DRAGON_FLAP, SoundCategory.PLAYERS, 0.6f, 1.6f);
+		world.playSound(null, player.blockPosition(), SoundEvents.ENDER_DRAGON_FLAP, SoundSource.PLAYERS, 0.6f, 1.6f);
 		return AbilityResult.OK;
 	}
 
 	/** Swooping Dive: landing after the Wings knocks the creatures around back for 5, and with Swoon infatuates them. */
-	private static void dive(ServerPlayerEntity player, RaceData data) {
-		ServerWorld world = player.getServerWorld();
+	private static void dive(ServerPlayer player, RaceData data) {
+		ServerLevel world = player.serverLevel();
 		long now = now(player.getServer());
-		for (LivingEntity e : world.getEntitiesByClass(LivingEntity.class, player.getBoundingBox().expand(3),
-				e -> e != player && e.isAlive() && !(e instanceof PlayerEntity) && !held(THRALLS, e, now) && !(e instanceof TameableEntity t && t.isTamed()))) {
-			e.damage(world.getDamageSources().indirectMagic(player, player), 5);
-			Vec3d push = e.getPos().subtract(player.getPos()).normalize();
-			e.addVelocity(push.x * 0.8, 0.3, push.z * 0.8);
-			e.velocityModified = true;
+		for (LivingEntity e : world.getEntitiesOfClass(LivingEntity.class, player.getBoundingBox().inflate(3),
+				e -> e != player && e.isAlive() && !(e instanceof Player) && !held(THRALLS, e, now) && !(e instanceof TamableAnimal t && t.isTame()))) {
+			e.hurt(world.damageSources().indirectMagic(player, player), 5);
+			Vec3 push = e.position().subtract(player.position()).normalize();
+			e.push(push.x * 0.8, 0.3, push.z * 0.8);
+			e.hurtMarked = true;
 			if (data.has(Talents.WING_SWOON) && hearted(e)) {
-				INFATUATED.put(e.getUuid(), new Spell(player.getUuid(), now + INFATUATION_TICKS));
-				if (e instanceof MobEntity mob && mob.getTarget() == player) {
+				INFATUATED.put(e.getUUID(), new Spell(player.getUUID(), now + INFATUATION_TICKS));
+				if (e instanceof Mob mob && mob.getTarget() == player) {
 					mob.setTarget(null);
 				}
 			}
 		}
-		Fx.ring(world, player.getPos(), 0.5f, 4, 12, ROSE_RGB);
+		Fx.ring(world, player.position(), 0.5f, 4, 12, ROSE_RGB);
 		Fx.shake(player, 1.2f, 8);
-		world.playSound(null, player.getBlockPos(), SoundEvents.ENTITY_GENERIC_SMALL_FALL, SoundCategory.PLAYERS, 1.2f, 0.6f);
+		world.playSound(null, player.blockPosition(), SoundEvents.GENERIC_SMALL_FALL, SoundSource.PLAYERS, 1.2f, 0.6f);
 	}
 
 	/** The Charm (Z): the creature you look at (16 blocks) becomes a thrall for 10 seconds and fights the other monsters. */
-	public static AbilityResult charm(ServerPlayerEntity player, RaceData data) {
+	public static AbilityResult charm(ServerPlayer player, RaceData data) {
 		if (!ready(player, data, 2)) {
 			return AbilityResult.COOLDOWN;
 		}
@@ -498,12 +498,12 @@ public final class Tempter {
 		if (data.resource < cost) {
 			return AbilityResult.NO_RESOURCE;
 		}
-		LivingEntity target = lookedAt(player, 16, e -> e instanceof MobEntity && !(e instanceof TameableEntity tame && tame.isTamed()));
-		if (!(target instanceof MobEntity mob)) {
+		LivingEntity target = lookedAt(player, 16, e -> e instanceof Mob && !(e instanceof TamableAnimal tame && tame.isTame()));
+		if (!(target instanceof Mob mob)) {
 			return AbilityResult.NO_SIGHT;
 		}
 		if (!hearted(mob)) {
-			player.sendMessage(Text.translatable("mages_legacy.tempter.no_heart"), true);
+			player.displayClientMessage(Component.translatable("mages_legacy.tempter.no_heart"), true);
 			return AbilityResult.HINTED;
 		}
 		data.addResource(-cost);
@@ -511,58 +511,58 @@ public final class Tempter {
 		long now = now(player.getServer());
 		// One thrall at a time (two with Two Hearts): a new one lets the oldest go
 		int allowed = data.has(Talents.CHARM_MORE) ? 2 : 1;
-		List<UUID> mine = new ArrayList<>(THRALLS.entrySet().stream().filter(e -> e.getValue().tempter().equals(player.getUuid()))
+		List<UUID> mine = new ArrayList<>(THRALLS.entrySet().stream().filter(e -> e.getValue().tempter().equals(player.getUUID()))
 				.sorted(Comparator.comparingLong(e -> e.getValue().until())).map(Map.Entry::getKey).toList());
 		while (mine.size() >= allowed) {
 			THRALLS.remove(mine.remove(0));
 		}
 		int ticks = data.has(Talents.CHARM_LONG) ? THRALL_TICKS_LONG : THRALL_TICKS;
-		THRALLS.put(mob.getUuid(), new Spell(player.getUuid(), now + ticks));
-		ASLEEP.remove(mob.getUuid());
+		THRALLS.put(mob.getUUID(), new Spell(player.getUUID(), now + ticks));
+		ASLEEP.remove(mob.getUUID());
 		mob.setTarget(null);
 		if (data.has(Talents.CHARM_STRONG)) {
-			mob.addStatusEffect(new StatusEffectInstance(StatusEffects.STRENGTH, ticks, 0));
-			mob.addStatusEffect(new StatusEffectInstance(StatusEffects.RESISTANCE, ticks, 0));
+			mob.addEffect(new MobEffectInstance(MobEffects.DAMAGE_BOOST, ticks, 0));
+			mob.addEffect(new MobEffectInstance(MobEffects.DAMAGE_RESISTANCE, ticks, 0));
 		}
-		ServerWorld world = player.getServerWorld();
+		ServerLevel world = player.serverLevel();
 		// Her eyes on it, and a heart that turns over its head for as long as it is hers
 		Fx.hearts(world, player, mob, 4, 16, ROSE_RGB);
 		Fx.sigil(world, mob, Fx.SIGIL_HEART, ticks, ROSE_RGB);
 		Fx.aura(world, mob, ticks, ROSE_RGB, Fx.MOTES);
-		world.spawnParticles(ParticleTypes.HEART, mob.getX(), mob.getY() + mob.getHeight() + 0.2, mob.getZ(), 5, 0.3, 0.2, 0.3, 0);
-		world.playSound(null, mob.getBlockPos(), SoundEvents.BLOCK_AMETHYST_BLOCK_CHIME, SoundCategory.PLAYERS, 1.2f, 0.8f);
-		world.playSound(null, player.getBlockPos(), SoundEvents.ENTITY_EVOKER_PREPARE_WOLOLO, SoundCategory.PLAYERS, 0.7f, 1.6f);
+		world.sendParticles(ParticleTypes.HEART, mob.getX(), mob.getY() + mob.getBbHeight() + 0.2, mob.getZ(), 5, 0.3, 0.2, 0.3, 0);
+		world.playSound(null, mob.blockPosition(), SoundEvents.AMETHYST_BLOCK_CHIME, SoundSource.PLAYERS, 1.2f, 0.8f);
+		world.playSound(null, player.blockPosition(), SoundEvents.EVOKER_PREPARE_WOLOLO, SoundSource.PLAYERS, 0.7f, 1.6f);
 		return AbilityResult.OK;
 	}
 
 	/** The Lullaby (H): every monster with a heart within 8 blocks falls asleep for 4 seconds; any blow but a kiss wakes it. */
-	public static AbilityResult lullaby(ServerPlayerEntity player, RaceData data) {
+	public static AbilityResult lullaby(ServerPlayer player, RaceData data) {
 		if (!ready(player, data, 3)) {
 			return AbilityResult.COOLDOWN;
 		}
 		if (data.resource < LULLABY_COST) {
 			return AbilityResult.NO_RESOURCE;
 		}
-		ServerWorld world = player.getServerWorld();
+		ServerLevel world = player.serverLevel();
 		long now = now(player.getServer());
 		double radius = data.has(Talents.SLEEP_WIDE) ? 12 : 8;
-		List<MobEntity> sleepers = world.getEntitiesByClass(MobEntity.class, player.getBoundingBox().expand(radius),
-				m -> m.isAlive() && m instanceof Monster && hearted(m) && !held(THRALLS, m, now) && m.squaredDistanceTo(player) <= radius * radius);
+		List<Mob> sleepers = world.getEntitiesOfClass(Mob.class, player.getBoundingBox().inflate(radius),
+				m -> m.isAlive() && m instanceof Enemy && hearted(m) && !held(THRALLS, m, now) && m.distanceToSqr(player) <= radius * radius);
 		if (sleepers.isEmpty()) {
 			return AbilityResult.NO_ENEMIES;
 		}
 		data.addResource(-LULLABY_COST);
 		cooldown(player, data, 3, LULLABY_COOLDOWN);
 		long until = now + (data.has(Talents.SLEEP_LONG) ? SLEEP_TICKS_LONG : SLEEP_TICKS);
-		for (MobEntity m : sleepers) {
-			ASLEEP.put(m.getUuid(), new Spell(player.getUuid(), until));
+		for (Mob m : sleepers) {
+			ASLEEP.put(m.getUUID(), new Spell(player.getUUID(), until));
 			m.setTarget(null);
 			m.getNavigation().stop();
 			Fx.sigil(world, m, Fx.SIGIL_MOON, (int) (until - now), DREAM_RGB);
 		}
-		Fx.lullaby(world, player.getPos(), (float) radius, 50, DREAM_RGB);
-		world.playSound(null, player.getBlockPos(), SoundEvents.BLOCK_NOTE_BLOCK_CHIME.value(), SoundCategory.PLAYERS, 1.2f, 0.7f);
-		world.playSound(null, player.getBlockPos(), SoundEvents.BLOCK_AMETHYST_BLOCK_RESONATE, SoundCategory.PLAYERS, 1.0f, 0.6f);
+		Fx.lullaby(world, player.position(), (float) radius, 50, DREAM_RGB);
+		world.playSound(null, player.blockPosition(), SoundEvents.NOTE_BLOCK_CHIME.value(), SoundSource.PLAYERS, 1.2f, 0.7f);
+		world.playSound(null, player.blockPosition(), SoundEvents.AMETHYST_BLOCK_RESONATE, SoundSource.PLAYERS, 1.0f, 0.6f);
 		return AbilityResult.OK;
 	}
 
@@ -570,46 +570,46 @@ public final class Tempter {
 	 * The Broken Heart (Alt, the Charm's crown): every heart she has won within 16 blocks (infatuated, a thrall or asleep
 	 * under her song) breaks: 8 damage and a quarter of its life, 30 at most, and it staggers.
 	 */
-	public static AbilityResult breakHeart(ServerPlayerEntity player, RaceData data) {
+	public static AbilityResult breakHeart(ServerPlayer player, RaceData data) {
 		if (!ready(player, data, 4)) {
 			return AbilityResult.COOLDOWN;
 		}
 		if (data.resource < BREAK_COST) {
 			return AbilityResult.NO_RESOURCE;
 		}
-		ServerWorld world = player.getServerWorld();
+		ServerLevel world = player.serverLevel();
 		long now = now(player.getServer());
-		List<MobEntity> won = world.getEntitiesByClass(MobEntity.class, player.getBoundingBox().expand(16),
+		List<Mob> won = world.getEntitiesOfClass(Mob.class, player.getBoundingBox().inflate(16),
 				m -> m.isAlive() && (heldBy(INFATUATED, m, player, now) || heldBy(THRALLS, m, player, now) || heldBy(ASLEEP, m, player, now)));
 		if (won.isEmpty()) {
-			player.sendMessage(Text.translatable("mages_legacy.tempter.no_hearts"), true);
+			player.displayClientMessage(Component.translatable("mages_legacy.tempter.no_hearts"), true);
 			return AbilityResult.HINTED;
 		}
 		data.addResource(-BREAK_COST);
 		cooldown(player, data, 4, BREAK_COOLDOWN);
-		for (MobEntity m : won) {
-			INFATUATED.remove(m.getUuid());
-			THRALLS.remove(m.getUuid());
-			ASLEEP.remove(m.getUuid());
-			m.damage(world.getDamageSources().indirectMagic(player, player), Math.min(30, 8 + m.getMaxHealth() * 0.25f));
-			m.addStatusEffect(new StatusEffectInstance(StatusEffects.SLOWNESS, 40, 3));
+		for (Mob m : won) {
+			INFATUATED.remove(m.getUUID());
+			THRALLS.remove(m.getUUID());
+			ASLEEP.remove(m.getUUID());
+			m.hurt(world.damageSources().indirectMagic(player, player), Math.min(30, 8 + m.getMaxHealth() * 0.25f));
+			m.addEffect(new MobEffectInstance(MobEffects.MOVEMENT_SLOWDOWN, 40, 3));
 			Fx.heartbreak(world, m, 30, ROSE_RGB);
 		}
-		Fx.ring(world, player.getPos(), 0.5f, 16, 18, ROSE_RGB);
-		Fx.burst(world, player.getPos().add(0, 1, 0), 3.0f, 10, WINE_INK);
+		Fx.ring(world, player.position(), 0.5f, 16, 18, ROSE_RGB);
+		Fx.burst(world, player.position().add(0, 1, 0), 3.0f, 10, WINE_INK);
 		Fx.screen(player, 18, ROSE_RGB);
 		Fx.shake(player, 2.0f, 12);
-		world.playSound(null, player.getBlockPos(), SoundEvents.BLOCK_GLASS_BREAK, SoundCategory.PLAYERS, 1.2f, 0.5f);
-		world.playSound(null, player.getBlockPos(), SoundEvents.ENTITY_WARDEN_HEARTBEAT, SoundCategory.PLAYERS, 1.5f, 0.6f);
+		world.playSound(null, player.blockPosition(), SoundEvents.GLASS_BREAK, SoundSource.PLAYERS, 1.2f, 0.5f);
+		world.playSound(null, player.blockPosition(), SoundEvents.WARDEN_HEARTBEAT, SoundSource.PLAYERS, 1.5f, 0.6f);
 		return AbilityResult.OK;
 	}
 
-	private static LivingEntity lookedAt(ServerPlayerEntity player, double range, java.util.function.Predicate<LivingEntity> filter) {
-		Vec3d eye = player.getEyePos();
-		Vec3d look = player.getRotationVec(1.0f);
-		Vec3d end = eye.add(look.multiply(range));
-		Box box = player.getBoundingBox().stretch(look.multiply(range)).expand(1);
-		EntityHitResult hit = ProjectileUtil.raycast(player, eye, end, box,
+	private static LivingEntity lookedAt(ServerPlayer player, double range, java.util.function.Predicate<LivingEntity> filter) {
+		Vec3 eye = player.getEyePosition();
+		Vec3 look = player.getViewVector(1.0f);
+		Vec3 end = eye.add(look.scale(range));
+		AABB box = player.getBoundingBox().expandTowards(look.scale(range)).inflate(1);
+		EntityHitResult hit = ProjectileUtil.getEntityHitResult(player, eye, end, box,
 				e -> e instanceof LivingEntity living && living.isAlive() && e != player && filter.test(living), range * range);
 		return hit != null && hit.getEntity() instanceof LivingEntity living ? living : null;
 	}
@@ -617,9 +617,9 @@ public final class Tempter {
 	// ---- damage ----
 
 	/** A fall on a Tempter: Soft Wings halve it. */
-	public static float modifyDamage(ServerPlayerEntity player, DamageSource source, float amount) {
+	public static float modifyDamage(ServerPlayer player, DamageSource source, float amount) {
 		RaceData data = RaceState.of(player);
-		if (data != null && data.has(Talents.WING_SOFT) && source.isIn(DamageTypeTags.IS_FALL)) {
+		if (data != null && data.has(Talents.WING_SOFT) && source.is(DamageTypeTags.IS_FALL)) {
 			return amount * 0.5f;
 		}
 		return amount;
@@ -633,15 +633,15 @@ public final class Tempter {
 		if (amount <= 0 || victim.getServer() == null) {
 			return amount;
 		}
-		Entity attacker = source.getAttacker();
-		boolean kiss = attacker instanceof ServerPlayerEntity p && is(p) && source.isOf(DamageTypes.INDIRECT_MAGIC);
+		Entity attacker = source.getEntity();
+		boolean kiss = attacker instanceof ServerPlayer p && is(p) && source.is(DamageTypes.INDIRECT_MAGIC);
 		if (!kiss) {
-			ASLEEP.remove(victim.getUuid());
+			ASLEEP.remove(victim.getUUID());
 		}
-		if (attacker instanceof ServerPlayerEntity player && is(player) && infatuated(victim, player)) {
+		if (attacker instanceof ServerPlayer player && is(player) && infatuated(victim, player)) {
 			amount *= 1.25f;
 			RaceData data = RaceState.of(player);
-			if (source.isOf(DamageTypes.PLAYER_ATTACK) && source.getSource() == player) {
+			if (source.is(DamageTypes.PLAYER_ATTACK) && source.getDirectEntity() == player) {
 				data.addResource(3);
 				if (data.has(Talents.KISS_LIFE)) {
 					player.heal(amount * 0.15f);
@@ -653,19 +653,19 @@ public final class Tempter {
 
 	/** A monster died: by a thrall's hand (Grateful Thrall pays), or won by her (the hunt pays). */
 	public static void onDeath(LivingEntity victim, DamageSource source) {
-		if (!(victim instanceof Monster) || victim.getServer() == null) {
+		if (!(victim instanceof Enemy) || victim.getServer() == null) {
 			return;
 		}
 		long now = now(victim.getServer());
-		Spell spell = THRALLS.get(victim.getUuid());
+		Spell spell = THRALLS.get(victim.getUUID());
 		if (spell == null) {
-			spell = INFATUATED.get(victim.getUuid());
+			spell = INFATUATED.get(victim.getUUID());
 		}
-		INFATUATED.remove(victim.getUuid());
-		THRALLS.remove(victim.getUuid());
-		ASLEEP.remove(victim.getUuid());
+		INFATUATED.remove(victim.getUUID());
+		THRALLS.remove(victim.getUUID());
+		ASLEEP.remove(victim.getUUID());
 		if (spell != null && spell.until() > now) {
-			ServerPlayerEntity tempter = victim.getServer().getPlayerManager().getPlayer(spell.tempter());
+			ServerPlayer tempter = victim.getServer().getPlayerList().getPlayer(spell.tempter());
 			if (tempter != null) {
 				Progression.addXp(tempter, RaceState.of(tempter), Progression.HUNT, 2, Progression.HUNT_CAP);
 				if (RaceState.of(tempter).has(Talents.WING_SUCCUBUS)) {
@@ -675,8 +675,8 @@ public final class Tempter {
 				}
 			}
 		}
-		Spell master = source.getAttacker() == null ? null : THRALLS.get(source.getAttacker().getUuid());
-		ServerPlayerEntity tempter = master == null ? null : victim.getServer().getPlayerManager().getPlayer(master.tempter());
+		Spell master = source.getEntity() == null ? null : THRALLS.get(source.getEntity().getUUID());
+		ServerPlayer tempter = master == null ? null : victim.getServer().getPlayerList().getPlayer(master.tempter());
 		if (tempter != null) {
 			RaceData data = RaceState.of(tempter);
 			Progression.addXp(tempter, data, Progression.HUNT, 2, Progression.HUNT_CAP);
@@ -688,55 +688,55 @@ public final class Tempter {
 	}
 
 	/** The Undying (the Kiss's crown): a killing blow takes the life of the nearest creature with a heart instead, once in 20 minutes. */
-	public static boolean allowDeath(ServerPlayerEntity player) {
+	public static boolean allowDeath(ServerPlayer player) {
 		RaceData data = RaceState.of(player);
 		if (data == null || data.race != Race.TEMPTER || !data.has(Talents.KISS_UNDYING) || !ready(player, data, UNDYING_SLOT)) {
 			return true;
 		}
-		ServerWorld world = player.getServerWorld();
-		LivingEntity instead = world.getEntitiesByClass(MobEntity.class, player.getBoundingBox().expand(8), m -> m.isAlive() && hearted(m)).stream()
-				.min(Comparator.comparingDouble(m -> m.squaredDistanceTo(player))).orElse(null);
+		ServerLevel world = player.serverLevel();
+		LivingEntity instead = world.getEntitiesOfClass(Mob.class, player.getBoundingBox().inflate(8), m -> m.isAlive() && hearted(m)).stream()
+				.min(Comparator.comparingDouble(m -> m.distanceToSqr(player))).orElse(null);
 		if (instead == null) {
 			return true;
 		}
-		instead.damage(world.getDamageSources().indirectMagic(player, player), Float.MAX_VALUE);
+		instead.hurt(world.damageSources().indirectMagic(player, player), Float.MAX_VALUE);
 		player.setHealth(player.getMaxHealth() * 0.3f);
 		data.readyAt.put(UNDYING_SLOT, now(player.getServer()) + UNDYING_COOLDOWN);
 		data.dirty = true;
 		Fx.hearts(world, instead, player, 12, 30, ROSE_RGB);
 		Fx.heartbreak(world, instead, 30, ROSE_RGB);
 		Fx.screen(player, 24, ROSE_RGB);
-		world.playSound(null, player.getBlockPos(), SoundEvents.ITEM_TOTEM_USE, SoundCategory.PLAYERS, 0.6f, 1.5f);
-		player.sendMessage(Text.translatable("mages_legacy.tempter.undying").formatted(Formatting.LIGHT_PURPLE), false);
+		world.playSound(null, player.blockPosition(), SoundEvents.TOTEM_USE, SoundSource.PLAYERS, 0.6f, 1.5f);
+		player.displayClientMessage(Component.translatable("mages_legacy.tempter.undying").withStyle(ChatFormatting.LIGHT_PURPLE), false);
 		return false;
 	}
 
 	/** Takes the Tempter's spells and changes away (the race was reset or changed). */
-	public static void cleanup(ServerPlayerEntity player) {
-		UUID id = player.getUuid();
+	public static void cleanup(ServerPlayer player) {
+		UUID id = player.getUUID();
 		INFATUATED.values().removeIf(s -> s.tempter().equals(id));
 		THRALLS.values().removeIf(s -> s.tempter().equals(id));
 		ASLEEP.values().removeIf(s -> s.tempter().equals(id));
 		WINGS.remove(id);
 		SECOND_FLIGHT.remove(id);
-		EntityAttributeInstance health = player.getAttributeInstance(EntityAttributes.GENERIC_MAX_HEALTH);
+		AttributeInstance health = player.getAttribute(Attributes.MAX_HEALTH);
 		if (health != null) {
 			health.removeModifier(FRAIL_HEALTH);
 		}
-		EntityAttributeInstance speed = player.getAttributeInstance(EntityAttributes.GENERIC_MOVEMENT_SPEED);
+		AttributeInstance speed = player.getAttribute(Attributes.MOVEMENT_SPEED);
 		if (speed != null) {
 			speed.removeModifier(NIGHT_SPEED);
 		}
 	}
 
 	/** What the HUD needs: how many hearts she holds now. */
-	public static NbtCompound clientInfo(ServerPlayerEntity player) {
-		NbtCompound nbt = new NbtCompound();
+	public static CompoundTag clientInfo(ServerPlayer player) {
+		CompoundTag nbt = new CompoundTag();
 		long now = now(player.getServer());
 		int hearts = 0;
 		for (Map<UUID, Spell> spells : List.of(INFATUATED, THRALLS)) {
 			for (Spell s : spells.values()) {
-				if (s.tempter().equals(player.getUuid()) && s.until() > now) {
+				if (s.tempter().equals(player.getUUID()) && s.until() > now) {
 					hearts++;
 				}
 			}

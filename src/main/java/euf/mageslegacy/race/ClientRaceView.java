@@ -1,6 +1,6 @@
 package euf.mageslegacy.race;
 
-import net.minecraft.entity.player.PlayerEntity;
+import net.minecraft.world.entity.player.Player;
 
 /**
  * What common code may ask about the client's own race. The client sets it from the sync packet; on a dedicated
@@ -14,7 +14,7 @@ public final class ClientRaceView {
 	private ClientRaceView() {
 	}
 
-	public static boolean isMycelid(PlayerEntity player) {
+	public static boolean isMycelid(Player player) {
 		return race == Race.MYCELID;
 	}
 }

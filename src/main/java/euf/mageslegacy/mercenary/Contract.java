@@ -1,7 +1,7 @@
 package euf.mageslegacy.mercenary;
 
 import java.util.Locale;
-import net.minecraft.nbt.NbtCompound;
+import net.minecraft.nbt.CompoundTag;
 
 /**
  * One job from the board in the Mage's Shop: hunt so many of a creature, bring so many of an item, or set foot in a
@@ -35,8 +35,8 @@ public final class Contract {
 		return progress >= amount;
 	}
 
-	public NbtCompound toNbt() {
-		NbtCompound nbt = new NbtCompound();
+	public CompoundTag toNbt() {
+		CompoundTag nbt = new CompoundTag();
 		nbt.putString("kind", kind.name().toLowerCase(Locale.ROOT));
 		nbt.putString("target", target);
 		nbt.putInt("amount", amount);
@@ -48,7 +48,7 @@ public final class Contract {
 		return nbt;
 	}
 
-	public static Contract fromNbt(NbtCompound nbt) {
+	public static Contract fromNbt(CompoundTag nbt) {
 		Kind kind;
 		try {
 			kind = Kind.valueOf(nbt.getString("kind").toUpperCase(Locale.ROOT));
