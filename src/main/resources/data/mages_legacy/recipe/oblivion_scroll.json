@@ -1,16 +1,26 @@
 {
-	"type": "minecraft:crafting_shaped",
-	"category": "misc",
-	"pattern": [
-		"ALA",
-		"EPE",
-		"ALA"
-	],
-	"key": {
-		"A": {"item": "minecraft:amethyst_shard"},
-		"L": {"item": "minecraft:lapis_block"},
-		"E": {"item": "minecraft:ender_eye"},
-		"P": {"item": "minecraft:paper"}
-	},
-	"result": {"item": "mages_legacy:oblivion_scroll"}
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "pattern": [
+    "ALA",
+    "EPE",
+    "ALA"
+  ],
+  "key": {
+    "A": {
+      "item": "minecraft:amethyst_shard"
+    },
+    "L": {
+      "item": "minecraft:lapis_block"
+    },
+    "E": {
+      "item": "minecraft:ender_eye"
+    },
+    "P": {
+      "item": "minecraft:paper"
+    }
+  },
+  "result": {
+    "id": "mages_legacy:oblivion_scroll"
+  }
 }

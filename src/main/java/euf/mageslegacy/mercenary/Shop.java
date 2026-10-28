@@ -81,12 +81,19 @@ public final class Shop {
 			new Ware("netherite_scrap", Kind.GOODS, 60, 4, 1, 0, () -> new ItemStack(Items.NETHERITE_SCRAP)));
 
 	/** What a random book of the shop can hold: useful enchantments at a good level, never the best of the best. */
-	private static final List<EnchantmentInstance> BOOKS = List.of(
-			new EnchantmentInstance(Enchantments.MENDING, 1), new EnchantmentInstance(Enchantments.UNBREAKING, 3),
-			new EnchantmentInstance(Enchantments.SHARPNESS, 4), new EnchantmentInstance(Enchantments.ALL_DAMAGE_PROTECTION, 3),
-			new EnchantmentInstance(Enchantments.BLOCK_EFFICIENCY, 4), new EnchantmentInstance(Enchantments.BLOCK_FORTUNE, 2),
-			new EnchantmentInstance(Enchantments.MOB_LOOTING, 2), new EnchantmentInstance(Enchantments.POWER_ARROWS, 4),
-			new EnchantmentInstance(Enchantments.FALL_PROTECTION, 4), new EnchantmentInstance(Enchantments.SILK_TOUCH, 1));
+	private record Book(net.minecraft.resources.ResourceKey<net.minecraft.world.item.enchantment.Enchantment> id, int level) {}
+	private static final List<Book> BOOKS = List.of(
+			new Book(Enchantments.MENDING, 1), new Book(Enchantments.UNBREAKING, 3),
+			new Book(Enchantments.SHARPNESS, 4), new Book(Enchantments.PROTECTION, 3),
+			new Book(Enchantments.EFFICIENCY, 4), new Book(Enchantments.FORTUNE, 2),
+			new Book(Enchantments.LOOTING, 2), new Book(Enchantments.POWER, 4),
+			new Book(Enchantments.FEATHER_FALLING, 4), new Book(Enchantments.SILK_TOUCH, 1));
+
+    private static ItemStack randomBook(ServerPlayer player) {
+        Book book = BOOKS.get(player.getRandom().nextInt(BOOKS.size()));
+        var enchantment = player.registryAccess().lookupOrThrow(net.minecraft.core.registries.Registries.ENCHANTMENT).getOrThrow(book.id());
+        return EnchantedBookItem.createForEnchantment(new EnchantmentInstance(enchantment, book.level()));
+    }
 
 	private Shop() {
 	}
@@ -160,7 +167,7 @@ public final class Shop {
 			case "hire_strength" -> hire(player, MobEffects.DAMAGE_BOOST, 0);
 			case "hire_guard" -> hire(player, MobEffects.DAMAGE_RESISTANCE, 0);
 			case "hire_haste" -> hire(player, MobEffects.DIG_SPEED, 1);
-			case "book" -> player.getInventory().placeItemBackInInventory(EnchantedBookItem.createForEnchantment(BOOKS.get(player.getRandom().nextInt(BOOKS.size()))));
+			case "book" -> player.getInventory().placeItemBackInInventory(randomBook(player));
 			default -> player.getInventory().placeItemBackInInventory(ware.icon().get());
 		}
 		player.playNotifySound(SoundEvents.VILLAGER_TRADE, SoundSource.PLAYERS, 0.7f, 0.9f);

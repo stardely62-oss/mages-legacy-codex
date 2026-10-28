@@ -128,7 +128,7 @@ public final class Mycelid {
 	/** Until when each Mycelid's Great Bloom lasts: then monsters dying in its clouds burst into new ones. */
 	private static final Map<UUID, Long> BLOOMING = new HashMap<>();
 	/** When each player may taste each effect again. Not saved: a relog costs at most one aftertaste. */
-	private static final Map<UUID, Map<MobEffect, Long>> TASTED = new HashMap<>();
+	private static final Map<UUID, Map<net.minecraft.core.Holder<MobEffect>, Long>> TASTED = new HashMap<>();
 
 	private Mycelid() {
 	}
@@ -263,7 +263,7 @@ public final class Mycelid {
 			player.heal(3);
 		}
 		// A taste is a moment's strength, not a lasting one: the same taste comes back only after its aftertaste
-		Map<MobEffect, Long> tasted = TASTED.computeIfAbsent(player.getUUID(), id -> new HashMap<>());
+		Map<net.minecraft.core.Holder<MobEffect>, Long> tasted = TASTED.computeIfAbsent(player.getUUID(), id -> new HashMap<>());
 		long now = now(player);
 		if (tasted.getOrDefault(effect, 0L) <= now) {
 			taste(player, data, effect);
