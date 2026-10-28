@@ -30,3 +30,44 @@ tasks.withType(JavaCompile).configureEach {
     options.compilerArgs += ['-Xmaxerrs', '1000']
 }
 jar { from('LICENSE') }
+
+sourceSets {
+    gametest {
+        compileClasspath += sourceSets.main.output
+        runtimeClasspath += sourceSets.main.output
+        resources.exclude 'fabric.mod.json'
+    }
+}
+configurations {
+    gametestImplementation.extendsFrom implementation
+    gametestRuntimeOnly.extendsFrom runtimeOnly
+}
+neoForge {
+    addModdingDependenciesTo sourceSets.gametest
+    mods {
+        mages_legacy_test { sourceSet(sourceSets.gametest) }
+    }
+    runs {
+        gameTestServer {
+            type = 'gameTestServer'
+            sourceSet = sourceSets.gametest
+            gameDirectory = file('build/gametest')
+            systemProperty 'neoforge.enabledGameTestNamespaces', 'mages_legacy'
+            systemProperty 'mages_legacy.gametest', 'true'
+        }
+        genworld {
+            server()
+            sourceSet = sourceSets.gametest
+            gameDirectory = file('build/harness-server')
+            systemProperty 'mages_legacy.genworld', 'true'
+            programArgument '--nogui'
+        }
+        harness {
+            client()
+            sourceSet = sourceSets.gametest
+            gameDirectory = file('build/harness-client')
+            systemProperty 'mages_legacy.harness', 'true'
+            programArguments.addAll '--quickPlaySingleplayer', 'harness', '--width', '1280', '--height', '720'
+        }
+    }
+}

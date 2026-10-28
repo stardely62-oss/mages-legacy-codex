@@ -22,6 +22,16 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
       - name: Compile native NeoForge sources
         run: ./gradlew build --stacktrace -Pbuild_number=${{ github.run_number }}
+      - name: Compile native GameTests and client harness
+        run: ./gradlew gametestClasses --stacktrace
+      - name: Native GameTests
+        run: |
+          ./gradlew runGameTestServer --stacktrace
+          python3 scripts/check-junit.py build/gametest/junit.xml
+      - name: Install Xvfb and software OpenGL
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq xvfb libgl1-mesa-dri libglx-mesa0
+      - name: Native client scenario
+        run: bash scripts/ci-harness.sh
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -29,3 +39,10 @@ jobs:
           path: |
             build/libs/
             build/reports/
+            build/gametest/junit.xml
+            build/gametest/logs/
+            build/harness-server/logs/
+            build/harness-client/logs/
+            build/harness-client/harness-result.txt
+            build/harness-client/screenshots/
+            build/harness-client/crash-reports/

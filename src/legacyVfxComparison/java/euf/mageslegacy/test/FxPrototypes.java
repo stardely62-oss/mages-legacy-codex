@@ -40,9 +40,9 @@ import team.lodestar.lodestone.systems.particle.world.type.LodestoneWorldParticl
  * photograph next to our own renderer. Only the harness uses this; the mod itself doesn't depend on either.
  */
 final class FxPrototypes {
-	private static final ResourceLocation HEART = new ResourceLocation("mages_legacy", "textures/fx/heart.png");
-	private static final ResourceLocation GLOW = new ResourceLocation("mages_legacy", "textures/fx/glow.png");
-	private static final ResourceLocation SPARK = new ResourceLocation("mages_legacy", "textures/fx/spark.png");
+	private static final ResourceLocation HEART = ResourceLocation.parse("mages_legacy", "textures/fx/heart.png");
+	private static final ResourceLocation GLOW = ResourceLocation.parse("mages_legacy", "textures/fx/glow.png");
+	private static final ResourceLocation SPARK = ResourceLocation.parse("mages_legacy", "textures/fx/spark.png");
 	private static final int ROSE = 0xFFFF6FA8;
 	private static final int PALE = 0xFFFFD6E6;
 
@@ -204,7 +204,7 @@ final class FxPrototypes {
 	}
 
 	private static LodestoneWorldParticleType type(String name) {
-		return (LodestoneWorldParticleType) BuiltInRegistries.PARTICLE_TYPE.get(new ResourceLocation("lodestone", name));
+		return (LodestoneWorldParticleType) BuiltInRegistries.PARTICLE_TYPE.get(ResourceLocation.parse("lodestone", name));
 	}
 
 	private static final Color ROSE_C = new Color(255, 111, 168);

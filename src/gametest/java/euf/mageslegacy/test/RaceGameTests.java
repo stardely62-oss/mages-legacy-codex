@@ -31,7 +31,8 @@ import euf.mageslegacy.voidborn.Pocket;
 import euf.mageslegacy.voidborn.Voidborn;
 import java.util.List;
 import java.util.UUID;
-import net.fabricmc.fabric.api.gametest.v1.FabricGameTest;
+import net.neoforged.neoforge.gametest.GameTestHolder;
+import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 import net.minecraft.advancements.Advancement;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.GlobalPos;
@@ -72,7 +73,10 @@ import net.minecraft.world.level.block.entity.AbstractFurnaceBlockEntity;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 
-public class RaceGameTests implements FabricGameTest {
+@GameTestHolder("mages_legacy")
+@PrefixGameTestTemplate(false)
+public class RaceGameTests {
+ private static final String EMPTY_STRUCTURE = "mages_legacy:empty";
 	static ServerPlayer mycelid(GameTestHelper ctx, BlockPos at) {
 		ServerPlayer player = (ServerPlayer) ctx.makeMockServerPlayerInLevel();
 		player.setGameMode(GameType.SURVIVAL);
@@ -137,7 +141,7 @@ public class RaceGameTests implements FabricGameTest {
 		check(Progression.unlock(player, data, Talents.SWARM_POTENT) == UnlockResult.NEEDS_MILESTONE, "tier 2 waits for the Nether");
 		check(Progression.unlock(player, data, "nonsense") == UnlockResult.UNKNOWN, "unknown talents are refused");
 
-		Advancement nether = player.server.getAdvancements().getAdvancement(new ResourceLocation("story/enter_the_nether"));
+		Advancement nether = player.server.getAdvancements().getAdvancement(ResourceLocation.parse("story/enter_the_nether"));
 		for (String criterion : nether.getCriteria().keySet()) {
 			player.getAdvancements().award(nether, criterion);
 		}
@@ -1106,7 +1110,7 @@ public class RaceGameTests implements FabricGameTest {
 			}
 			net.minecraft.world.phys.HitResult hit = player.pick(6, 1.0f, false);
 			check(furnace.getItem(2).getCount() >= 1, "the quickened furnace smelts: " + quickened + ", quickened " + Frozen.quickened(world, at.east())
-					+ ", look " + hit.getType() + " at " + (hit instanceof net.minecraft.world.phys.BlockHitResult b ? b.getBlockPos().subtract(at) : null)
+					+ ", look " + hit.getType() + " at " + (hit instanceof net.minecraft.world.phys.BlockHitResult b ? b.blockPosition().subtract(at) : null)
 					+ ", furnace " + furnace.saveWithoutMetadata());
 		}
 		world.removeBlock(at.east(), false);

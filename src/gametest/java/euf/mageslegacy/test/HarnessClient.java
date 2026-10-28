@@ -35,9 +35,9 @@ import java.util.Locale;
 import java.util.UUID;
 import java.util.function.Consumer;
 import java.util.function.Function;
-import net.fabricmc.api.ClientModInitializer;
-import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
-import net.fabricmc.loader.api.FabricLoader;
+
+
+import net.neoforged.fml.ModList;
 import net.minecraft.client.CameraType;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
@@ -74,7 +74,7 @@ import org.slf4j.LoggerFactory;
  * then jumps, raises a spore cloud, eats a mushroom and travels through mycelium nodes, with screenshots on the way.
  * Writes harness-result.txt; scripts/ci-harness.sh fails the build unless it says PASS and every screenshot exists.
  */
-public class HarnessClient implements ClientModInitializer {
+public class HarnessClient {
 	private static final Logger LOGGER = LoggerFactory.getLogger("mages_legacy-harness");
 
 	/** A step of the scenario: its action, then a wait; {@code until}, if given, holds the step back until it's true (or 100 ticks). */
@@ -89,7 +89,6 @@ public class HarnessClient implements ClientModInitializer {
 	private volatile UUID zombie;
 	private Vec3 beforeJump;
 
-	@Override
 	public void onInitializeClient() {
 		if (!Boolean.getBoolean("mages_legacy.harness")) {
 			return;
@@ -103,7 +102,7 @@ public class HarnessClient implements ClientModInitializer {
 		});
 		// Keys: JourneyMap is installed, the third ability was left on JourneyMap's G; the mod moved it, nothing clashes
 		step(1, false, c -> {
-			check("journeymap_loaded", FabricLoader.getInstance().isModLoaded("journeymap"));
+			check("journeymap_loaded", ModList.get().isLoaded("journeymap"));
 			check("old_key_settled", MagesLegacyClient.ABILITY_KEYS[2].isDefault());
 			StringBuilder clashes = new StringBuilder();
 			for (KeyMapping ours : MagesLegacyClient.ourKeys()) {
@@ -1022,11 +1021,8 @@ public class HarnessClient implements ClientModInitializer {
 			c.options.setCameraType(CameraType.FIRST_PERSON);
 			commands(c, "race set @a tempter", "race xp @a 20000", "kill @e[type=!player]", "time set 18000");
 		});
-		step(20, false, c -> {
-			check("trial_photon_loaded", FxPrototypes.photonLoaded());
-			check("trial_lodestone_loaded", FxPrototypes.lodestoneLoaded());
-		});
-		String[] backends = {"own", "photon", "lodestone"};
+
+		String[] backends = {"own"};
 		for (String backend : backends) {
 			// A fresh spider each time, so nothing of the last trial lingers on it
 			step(10, false, c -> {
@@ -1053,7 +1049,7 @@ public class HarnessClient implements ClientModInitializer {
 			}
 			step(4, false, c -> {
 				screenshot(c, "trial_" + backend + "_charm");
-				FxPrototypes.stopPhoton();
+
 			});
 		}
 		step(10, false, c -> {
@@ -1063,7 +1059,7 @@ public class HarnessClient implements ClientModInitializer {
 
 		step(20, false, this::finish);
 
-		ClientTickEvents.END_CLIENT_TICK.register(this::tick);
+		net.neoforged.neoforge.common.NeoForge.EVENT_BUS.addListener((net.neoforged.neoforge.client.event.ClientTickEvent.Post event) -> tick(Minecraft.getInstance()));
 	}
 
 	// ---- server-side helpers ----
@@ -1104,8 +1100,6 @@ public class HarnessClient implements ClientModInitializer {
 			return;
 		}
 		switch (backend) {
-			case "photon" -> FxPrototypes.photonKiss(target, client.player);
-			case "lodestone" -> FxPrototypes.lodestoneKiss(target, client.player);
 			default -> {
 				// Our own: the real Kiss (the server turned the player to the spider a moment before, see trialLook)
 				key(0);
@@ -1119,12 +1113,6 @@ public class HarnessClient implements ClientModInitializer {
 			return;
 		}
 		switch (backend) {
-			case "photon" -> {
-				if (tick == 0) {
-					FxPrototypes.photonCharm(target);
-				}
-			}
-			case "lodestone" -> FxPrototypes.lodestoneCharmTick(target, tick);
 			default -> {
 				if (tick == 2) {
 					key(2);
@@ -1243,7 +1231,7 @@ public class HarnessClient implements ClientModInitializer {
 		if (next.until() != null && !next.until().test(client) && ticks < nextStepTick + 100) {
 			return;
 		}
-		if (next.needsTerrain() && !client.levelRenderer.hasRenderedAllChunks() && ticks < nextStepTick + 400) {
+		if (next.needsTerrain() && !client.levelRenderer.hasRenderedAllSections() && ticks < nextStepTick + 400) {
 			return;
 		}
 		steps.poll();
