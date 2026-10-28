@@ -30,7 +30,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
  */
 @Mixin(LivingEntity.class)
 public abstract class LivingEntityMixin {
-	@ModifyVariable(method = "damage", at = @At("HEAD"), argsOnly = true, ordinal = 0)
+	@ModifyVariable(method = "hurt", at = @At("HEAD"), argsOnly = true, ordinal = 0)
 	private float mages_legacy$raceDamage(float amount, DamageSource source) {
 		LivingEntity self = (LivingEntity) (Object) this;
 		if (self.level().isClientSide()) {
@@ -58,7 +58,7 @@ public abstract class LivingEntityMixin {
 	}
 
 	/** A Masked in a spider's face climbs walls like a ladder; the client decides for its own player, the server for all. */
-	@Inject(method = "isClimbing", at = @At("RETURN"), cancellable = true)
+	@Inject(method = "onClimbable", at = @At("RETURN"), cancellable = true)
 	private void mages_legacy$spiderFace(CallbackInfoReturnable<Boolean> cir) {
 		LivingEntity self = (LivingEntity) (Object) this;
 		if (cir.getReturnValueZ() || !(self instanceof Player player) || !player.horizontalCollision || player.isSpectator()) {
@@ -70,7 +70,7 @@ public abstract class LivingEntityMixin {
 	}
 
 	/** No friendly fire, no blow on a rewinding or blurred Frozen: it doesn't land at all (no knockback, no flash). */
-	@Inject(method = "damage", at = @At("HEAD"), cancellable = true)
+	@Inject(method = "hurt", at = @At("HEAD"), cancellable = true)
 	private void mages_legacy$friendlyFire(DamageSource source, float amount, CallbackInfoReturnable<Boolean> cir) {
 		LivingEntity self = (LivingEntity) (Object) this;
 		if (!self.level().isClientSide() && (Shepherd.friendlyFire(self, source) || Frozen.avoids(self, source) || Bloodkin.avoids(self)
@@ -79,7 +79,7 @@ public abstract class LivingEntityMixin {
 		}
 	}
 
-	@ModifyVariable(method = "addStatusEffect(Lnet/minecraft/entity/effect/StatusEffectInstance;Lnet/minecraft/entity/Entity;)Z",
+	@ModifyVariable(method = "addEffect(Lnet/minecraft/world/effect/MobEffectInstance;Lnet/minecraft/world/entity/Entity;)Z",
 			at = @At("HEAD"), argsOnly = true)
 	private MobEffectInstance mages_legacy$shorterEffects(MobEffectInstance effect) {
 		LivingEntity self = (LivingEntity) (Object) this;

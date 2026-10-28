@@ -288,7 +288,7 @@ public final class Mycelid {
 		data.tastes.add(id);
 		int max = data.has(Talents.FLESH_TWO_TASTES) ? 2 : 1;
 		while (data.tastes.size() > max) {
-			MobEffect old = BuiltInRegistries.MOB_EFFECT.get(new ResourceLocation(data.tastes.remove(0)));
+			MobEffect old = BuiltInRegistries.MOB_EFFECT.get(ResourceLocation.parse(data.tastes.remove(0)));
 			if (old != null) {
 				player.removeEffect(old);
 			}

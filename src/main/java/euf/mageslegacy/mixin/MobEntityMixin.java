@@ -19,7 +19,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
  */
 @Mixin(Mob.class)
 public abstract class MobEntityMixin {
-	@Inject(method = "isAffectedByDaylight", at = @At("HEAD"), cancellable = true)
+	@Inject(method = "isSunBurnTick", at = @At("HEAD"), cancellable = true)
 	private void mages_legacy$echoesIgnoreTheSun(CallbackInfoReturnable<Boolean> cir) {
 		if (Echoes.isEcho((Mob) (Object) this)) {
 			cir.setReturnValue(false);

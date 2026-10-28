@@ -79,7 +79,7 @@ public class BestiaryScreen extends Screen {
 
 	@Override
 	public void tick() {
-		nameField.tick();
+		
 	}
 
 	/** Beast rows on the right, as {x, y, w} for row {@code index}. */
@@ -202,12 +202,12 @@ public class BestiaryScreen extends Screen {
 	}
 
 	@Override
-	public boolean mouseScrolled(double mouseX, double mouseY, double amount) {
+	public boolean mouseScrolled(double mouseX, double mouseY, double horizontalAmount, double amount) {
 		if (mouseX < leftX() + colWidth()) {
 			echoScroll = Mth.clamp(echoScroll - (int) (amount * 20), 0, maxScroll());
 			return true;
 		}
-		return super.mouseScrolled(mouseX, mouseY, amount);
+		return super.mouseScrolled(mouseX, mouseY, horizontalAmount, amount);
 	}
 
 	/** One more (+1) or one less (-1) of this echo in the active squad (also used by the harness). */

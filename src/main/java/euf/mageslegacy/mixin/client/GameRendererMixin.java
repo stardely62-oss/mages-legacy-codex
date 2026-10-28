@@ -14,7 +14,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 @Mixin(GameRenderer.class)
 public class GameRendererMixin {
 	/** Where a hurt tilts the view, the abilities shake it. */
-	@Inject(method = "tiltViewWhenHurt", at = @At("HEAD"))
+	@Inject(method = "bobHurt", at = @At("HEAD"))
 	private void mages_legacy$shake(PoseStack matrices, float tickDelta, CallbackInfo ci) {
 		FxRenderer.shake(matrices, tickDelta);
 	}

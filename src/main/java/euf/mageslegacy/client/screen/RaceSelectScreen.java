@@ -60,7 +60,7 @@ public class RaceSelectScreen extends Screen {
 	}
 
 	@Override
-	public boolean mouseScrolled(double mouseX, double mouseY, double amount) {
+	public boolean mouseScrolled(double mouseX, double mouseY, double horizontalAmount, double amount) {
 		if (mouseY >= detailTop() && mouseY < detailBottom()) {
 			if (mouseX < width / 2.0) {
 				legendScroll = Math.max(0, Math.min(legendMax, legendScroll - (int) (amount * 12)));
@@ -69,7 +69,7 @@ public class RaceSelectScreen extends Screen {
 			}
 			return true;
 		}
-		return super.mouseScrolled(mouseX, mouseY, amount);
+		return super.mouseScrolled(mouseX, mouseY, horizontalAmount, amount);
 	}
 
 	/** A thin scrollbar along the right edge of a scrolled area. */

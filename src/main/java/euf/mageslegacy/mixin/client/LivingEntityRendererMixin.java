@@ -20,31 +20,21 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 public abstract class LivingEntityRendererMixin {
 	private static boolean mages_legacy$echo;
 
-	@Inject(method = "render(Lnet/minecraft/entity/LivingEntity;FFLnet/minecraft/client/util/math/MatrixStack;Lnet/minecraft/client/render/VertexConsumerProvider;I)V",
+	@Inject(method = "render(Lnet/minecraft/world/entity/LivingEntity;FFLcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/MultiBufferSource;I)V",
 			at = @At("HEAD"))
 	private void mages_legacy$remember(LivingEntity entity, float yaw, float delta, PoseStack matrices, MultiBufferSource vertices, int light,
 			CallbackInfo ci) {
 		mages_legacy$echo = EchoVisuals.isEcho(entity);
 	}
 
-	@Inject(method = "isVisible", at = @At("HEAD"), cancellable = true)
+	@Inject(method = "isBodyVisible", at = @At("HEAD"), cancellable = true)
 	private void mages_legacy$spirit(LivingEntity entity, CallbackInfoReturnable<Boolean> cir) {
 		if (EchoVisuals.isEcho(entity)) {
 			cir.setReturnValue(false);
 		}
 	}
 
-	@ModifyArg(method = "render(Lnet/minecraft/entity/LivingEntity;FFLnet/minecraft/client/util/math/MatrixStack;Lnet/minecraft/client/render/VertexConsumerProvider;I)V",
-			at = @At(value = "INVOKE", target = "Lnet/minecraft/client/render/entity/model/EntityModel;render(Lnet/minecraft/client/util/math/MatrixStack;Lnet/minecraft/client/render/VertexConsumer;IIFFFF)V"),
-			index = 4)
-	private float mages_legacy$red(float red) {
-		return mages_legacy$echo ? 0.62f : red;
-	}
-
-	@ModifyArg(method = "render(Lnet/minecraft/entity/LivingEntity;FFLnet/minecraft/client/util/math/MatrixStack;Lnet/minecraft/client/render/VertexConsumerProvider;I)V",
-			at = @At(value = "INVOKE", target = "Lnet/minecraft/client/render/entity/model/EntityModel;render(Lnet/minecraft/client/util/math/MatrixStack;Lnet/minecraft/client/render/VertexConsumer;IIFFFF)V"),
-			index = 7)
-	private float mages_legacy$alpha(float alpha) {
-		return mages_legacy$echo ? 0.6f : alpha;
-	}
+    @ModifyArg(method = "render(Lnet/minecraft/world/entity/LivingEntity;FFLcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/MultiBufferSource;I)V",
+        at = @At(value = "INVOKE", target = "Lnet/minecraft/client/model/EntityModel;renderToBuffer(Lcom/mojang/blaze3d/vertex/PoseStack;Lcom/mojang/blaze3d/vertex/VertexConsumer;III)V"), index = 4)
+    private int mages_legacy$tint(int color) { return mages_legacy$echo ? 0x999EFFFF : color; }
 }

@@ -98,7 +98,7 @@ public class RaceState extends SavedData {
 			List<GlobalPos> list = new ArrayList<>();
 			for (Tag e : nodeTag.getList(key, Tag.TAG_COMPOUND)) {
 				CompoundTag entry = (CompoundTag) e;
-				ResourceKey<Level> dim = ResourceKey.create(Registries.DIMENSION, new ResourceLocation(entry.getString("dim")));
+				ResourceKey<Level> dim = ResourceKey.create(Registries.DIMENSION, ResourceLocation.parse(entry.getString("dim")));
 				list.add(GlobalPos.of(dim, BlockPos.of(entry.getLong("pos"))));
 			}
 			state.nodes.put(UUID.fromString(key), list);

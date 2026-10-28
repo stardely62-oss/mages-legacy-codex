@@ -91,7 +91,7 @@ public class TalentScreen extends Screen {
 	}
 
 	@Override
-	public boolean mouseScrolled(double mouseX, double mouseY, double amount) {
+	public boolean mouseScrolled(double mouseX, double mouseY, double horizontalAmount, double amount) {
 		if (showGuide) {
 			guideScroll = Math.max(0, Math.min(guideMaxScroll, guideScroll - (int) (amount * 20)));
 			return true;
@@ -104,7 +104,7 @@ public class TalentScreen extends Screen {
 			treeScroll = Math.max(0, Math.min(treeMaxScroll(), treeScroll - (int) (amount * 20)));
 			return true;
 		}
-		return super.mouseScrolled(mouseX, mouseY, amount);
+		return super.mouseScrolled(mouseX, mouseY, horizontalAmount, amount);
 	}
 
 	/** A thin scrollbar: the track, and a thumb as long as the visible part. */

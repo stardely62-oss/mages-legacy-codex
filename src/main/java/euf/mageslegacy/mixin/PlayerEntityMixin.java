@@ -26,7 +26,7 @@ public abstract class PlayerEntityMixin {
 	private Item mages_legacy$eating;
 
 	/** A Voidborn in the middle of a Void Step moves through solid blocks. */
-	@Inject(method = "tickMovement", at = @At("HEAD"))
+	@Inject(method = "aiStep", at = @At("HEAD"))
 	private void mages_legacy$phase(CallbackInfo ci) {
 		Player self = (Player) (Object) this;
 		if (Voidborn.phasing(self)) {
@@ -34,13 +34,13 @@ public abstract class PlayerEntityMixin {
 		}
 	}
 
-	@Inject(method = "eatFood", at = @At("HEAD"))
+	@Inject(method = "eat", at = @At("HEAD"))
 	private void mages_legacy$beforeEat(Level world, ItemStack stack, CallbackInfoReturnable<ItemStack> cir) {
 		// Remember the item now: eating shrinks the stack, and a stew turns into a bowl
 		mages_legacy$eating = stack.isEdible() ? stack.getItem() : null;
 	}
 
-	@Inject(method = "eatFood", at = @At("RETURN"))
+	@Inject(method = "eat", at = @At("RETURN"))
 	private void mages_legacy$afterEat(Level world, ItemStack stack, CallbackInfoReturnable<ItemStack> cir) {
 		Item item = mages_legacy$eating;
 		mages_legacy$eating = null;

@@ -8,6 +8,6 @@ import org.spongepowered.asm.mixin.gen.Invoker;
 /** A bonded fox trusts its Shepherd, so it no longer runs away. */
 @Mixin(Fox.class)
 public interface FoxEntityInvoker {
-	@Invoker("addTrustedUuid")
+	@Invoker("addTrustedUUID")
 	void mages_legacy$trust(UUID uuid);
 }
