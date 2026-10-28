@@ -61,7 +61,7 @@ try {
     $profileText = Get-Content -LiteralPath $profile -Raw
     $loaderMatch = [regex]::Match($profileText, 'net\.neoforged:neoforge:(21\.1\.[0-9]+)')
     if (-not $loaderMatch.Success) { throw 'Choose a NeoForge 1.21.1 profile in the separate game directory.' }
-    if ([version]$loaderMatch.Groups[1].Value -lt [version]'21.1.265') { throw 'NeoForge 21.1.265 or newer for Minecraft 1.21.1 is required.' }
+    if ([version]$loaderMatch.Groups[1].Value -lt [version]'21.1.264') { throw 'NeoForge 21.1.264 or newer for Minecraft 1.21.1 is required.' }
     if (Get-ChildItem -LiteralPath $mods -Filter 'fabric-api-*.jar') { throw 'This folder contains Fabric mods. Use a clean NeoForge profile.' }
 
     # 4. Сам мод из GitHub Releases

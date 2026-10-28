@@ -9,7 +9,7 @@ description="Independent NeoForge 1.21.1 edition."
 [[dependencies.mages_legacy]]
 modId="neoforge"
 type="required"
-versionRange="[21.1.265,21.2)"
+versionRange="[21.1.264,21.2)"
 ordering="NONE"
 side="BOTH"
 [[dependencies.mages_legacy]]

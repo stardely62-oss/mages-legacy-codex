@@ -1,6 +1,6 @@
 # NeoForge 1.21.1 port
 
-Target: Minecraft 1.21.1, NeoForge 21.1.265+, Java 21, ModDevGradle 2.0.148.
+Target: Minecraft 1.21.1, NeoForge 21.1.264+, Java 21, ModDevGradle 2.0.148.
 The original repositories and Claude working trees are not part of this port.
 
 Production code uses Mojang mappings, native NeoForge registries/events and
