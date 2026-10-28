@@ -33,7 +33,7 @@ import java.util.List;
 import java.util.UUID;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
-import net.minecraft.advancements.Advancement;
+import net.minecraft.advancements.AdvancementHolder;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.GlobalPos;
 import net.minecraft.gametest.framework.GameTest;
@@ -76,7 +76,7 @@ import net.minecraft.world.phys.Vec3;
 @GameTestHolder("mages_legacy")
 @PrefixGameTestTemplate(false)
 public class RaceGameTests {
- private static final String EMPTY_STRUCTURE = "mages_legacy:empty";
+ private static final String EMPTY_STRUCTURE = "empty";
 	static ServerPlayer mycelid(GameTestHelper ctx, BlockPos at) {
 		ServerPlayer player = (ServerPlayer) ctx.makeMockServerPlayerInLevel();
 		player.setGameMode(GameType.SURVIVAL);
@@ -141,8 +141,8 @@ public class RaceGameTests {
 		check(Progression.unlock(player, data, Talents.SWARM_POTENT) == UnlockResult.NEEDS_MILESTONE, "tier 2 waits for the Nether");
 		check(Progression.unlock(player, data, "nonsense") == UnlockResult.UNKNOWN, "unknown talents are refused");
 
-		Advancement nether = player.server.getAdvancements().getAdvancement(ResourceLocation.parse("story/enter_the_nether"));
-		for (String criterion : nether.getCriteria().keySet()) {
+		AdvancementHolder nether = player.server.getAdvancements().get(ResourceLocation.parse("story/enter_the_nether"));
+		for (String criterion : nether.value().criteria().keySet()) {
 			player.getAdvancements().award(nether, criterion);
 		}
 		check(data.level < 10 && Progression.openTiers(player) == 1, "the Nether alone isn't enough below level 10 (level " + data.level + ")");
@@ -306,12 +306,12 @@ public class RaceGameTests {
 		data.talents.add(Talents.SWARM_WIDE);
 		data.talents.add(Talents.FLESH_HEARTY);
 		check(data.freePoints() < data.totalPoints(), "some points spent first");
-		player.setItemInHand(InteractionHand.MAIN_HAND, new ItemStack(MagesLegacy.OBLIVION_SCROLL, 2));
-		check(MagesLegacy.OBLIVION_SCROLL.use(ctx.getLevel(), player, InteractionHand.MAIN_HAND).getResult().isAccepted(), "the scroll is read");
+		player.setItemInHand(InteractionHand.MAIN_HAND, new ItemStack(MagesLegacy.OBLIVION_SCROLL.get(), 2));
+		check(MagesLegacy.OBLIVION_SCROLL.get().use(ctx.getLevel(), player, InteractionHand.MAIN_HAND).getResult().consumesAction(), "the scroll is read");
 		check(data.talents.isEmpty() && data.freePoints() == data.totalPoints(), "every talent forgotten, every point back");
 		check(data.level == level && data.race == Race.MYCELID, "the race and its level stay");
 		check(player.getMainHandItem().getCount() == 1, "one scroll used up");
-		check(!MagesLegacy.OBLIVION_SCROLL.use(ctx.getLevel(), player, InteractionHand.MAIN_HAND).getResult().isAccepted()
+		check(!MagesLegacy.OBLIVION_SCROLL.get().use(ctx.getLevel(), player, InteractionHand.MAIN_HAND).getResult().consumesAction()
 				&& player.getMainHandItem().getCount() == 1, "nothing to forget: the scroll stays");
 		done(ctx, player);
 	}
@@ -367,32 +367,32 @@ public class RaceGameTests {
 		check((int) data.resource == 25, "a jump costs 15 spores");
 		check(Mycelid.sporeJump(player, data) == AbilityResult.COOLDOWN, "no second jump right away");
 		ctx.runAfterDelay(Mycelid.JUMP_DELAY + 3, () -> {
-			double moved = player.getPos().subtract(from).horizontalLength();
+			double moved = player.position().subtract(from).horizontalLength();
 			check(moved > 2 && moved <= 16.6, "the player should sprout up to 16 blocks ahead, moved " + moved);
-			check(player.getZ() > from.z, "forward is south, now at " + player.getPos());
-			check(!world.isSpaceEmpty(player, player.getBoundingBox().offset(0, -0.3, 0)), "landed on the floor");
+			check(player.getZ() > from.z, "forward is south, now at " + player.position());
+			check(!world.noCollision(player, player.getBoundingBox().move(0, -0.3, 0)), "landed on the floor");
 			// Looking almost level: the spore flies the full reach and the Mycelid settles on the floor there
-			Vec3d second = player.getPos();
+			net.minecraft.world.phys.Vec3 second = player.position();
 			player.refreshPositionAndAngles(second.x, second.y, second.z, 0, 3);
 			data.readyAt.clear();
 			data.chainLeft = 0;
 			check(Mycelid.sporeJump(player, data) == AbilityResult.OK, "the level jump should start");
-			ctx.waitAndRun(Mycelid.JUMP_DELAY + 3, () -> {
-				double far = player.getPos().subtract(second).horizontalLength();
+			ctx.runAfterDelay(Mycelid.JUMP_DELAY + 3, () -> {
+				double far = player.position().subtract(second).horizontalLength();
 				check(far > 12 && far <= 16.6, "a level jump should cover most of the 16 blocks, moved " + far);
 				// Looking a little up into the open sky: the spores drift down and settle on the floor far ahead, never in
 				// the air and never right at the Mycelid's feet
 				data.addResource(100);
-				Vec3d third = player.getPos();
+				net.minecraft.world.phys.Vec3 third = player.position();
 				player.refreshPositionAndAngles(third.x, third.y, third.z, 180, -15);
 				data.readyAt.clear();
 				data.chainLeft = 0;
 				AbilityResult up = Mycelid.sporeJump(player, data);
-				ctx.waitAndRun(Mycelid.JUMP_DELAY + 3, () -> {
-					double upward = player.getPos().subtract(third).horizontalLength();
+				ctx.runAfterDelay(Mycelid.JUMP_DELAY + 3, () -> {
+					double upward = player.position().subtract(third).horizontalLength();
 					check(up == AbilityResult.OK && upward > 10, "a jump aimed a little up carries far, moved " + upward + " (" + up + ")");
-					check(!world.isSpaceEmpty(player, player.getBoundingBox().offset(0, -0.3, 0)),
-							"never left hanging in the air, now at " + player.getPos());
+					check(!world.noCollision(player, player.getBoundingBox().move(0, -0.3, 0)),
+							"never left hanging in the air, now at " + player.position());
 					done(ctx, player);
 				});
 			});
@@ -474,7 +474,7 @@ public class RaceGameTests {
 			Mycelid.placeNodeAt(world, spot, owner.getUUID(), 3);
 		}
 		RaceState state = RaceState.get(world.getServer());
-		check(!world.getBlockState(spots.get(0)).is(MagesLegacy.MYCELIUM_NODE), "past the limit the oldest node withers");
+		check(!world.getBlockState(spots.get(0)).is(MagesLegacy.MYCELIUM_NODE.get()), "past the limit the oldest node withers");
 		check(state.nodes(owner.getUUID()).size() == 3, "three nodes in the network");
 
 		// A stranger uses the network: from node 2 to node 3
@@ -1063,7 +1063,7 @@ public class RaceGameTests {
 		ServerPlayer player = frozen(ctx, at);
 		RaceData data = RaceState.of(player);
 		Zombie zombie = beast(ctx, EntityType.ZOMBIE, at.offset(2, 0, 0));
-		Arrow arrow = new Arrow(world, at.getX() - 2.0, at.getY() + 1.5, at.getZ() + 0.5);
+		Arrow arrow = new Arrow(world, at.getX() - 2.0, at.getY() + 1.5, at.getZ() + 0.5, new ItemStack(Items.ARROW), null);
 		arrow.setDeltaMovement(1, 0, 0);
 		arrow.setNoGravity(true);
 		world.addFreshEntity(arrow);
@@ -1110,8 +1110,8 @@ public class RaceGameTests {
 			}
 			net.minecraft.world.phys.HitResult hit = player.pick(6, 1.0f, false);
 			check(furnace.getItem(2).getCount() >= 1, "the quickened furnace smelts: " + quickened + ", quickened " + Frozen.quickened(world, at.east())
-					+ ", look " + hit.getType() + " at " + (hit instanceof net.minecraft.world.phys.BlockHitResult b ? b.blockPosition().subtract(at) : null)
-					+ ", furnace " + furnace.saveWithoutMetadata());
+					+ ", look " + hit.getType() + " at " + (hit instanceof net.minecraft.world.phys.BlockHitResult b ? b.getBlockPos().subtract(at) : null)
+					+ ", furnace " + furnace.saveWithoutMetadata(ctx.getLevel().registryAccess()));
 		}
 		world.removeBlock(at.east(), false);
 		done(ctx, player);
@@ -1590,7 +1590,7 @@ public class RaceGameTests {
 			}
 			check(result == AbilityResult.OK, "the Excision: " + result);
 			check(world.getEntity(id) == null && pocket.getEntity(id) != null, "the zombie is in the pocket now");
-			check(pocket.getBlockState(BlockPos.containing(Pocket.center(data.voidborn.room)).down()).isOf(Blocks.AMETHYST_BLOCK), "the room was laid");
+			check(pocket.getBlockState(BlockPos.containing(Pocket.center(data.voidborn.room)).below()).is(Blocks.AMETHYST_BLOCK), "the room was laid");
 			// Leaving the race lets go of whatever it held: it comes back where it was
 			Voidborn.cleanup(player);
 			ctx.runAtTickTime(ctx.getTick() + 3, () -> {

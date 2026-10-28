@@ -203,14 +203,14 @@ public class HarnessClient {
 		});
 		step(5, false, c -> {
 			if (c.screen instanceof TalentScreen tree) {
-				tree.mouseScrolled(c.screen.width / 2.0, c.screen.height / 2.0, -3);
+				tree.mouseScrolled(c.screen.width / 2.0, c.screen.height / 2.0, 0, -3);
 			}
 		});
 		step(5, false, c -> {
 			screenshot(c, "talents_guide_scrolled");
 			if (c.screen instanceof TalentScreen tree) {
 				tree.toggleGuide();
-				tree.mouseScrolled(c.screen.width / 2.0, c.screen.height / 2.0, -10);
+				tree.mouseScrolled(c.screen.width / 2.0, c.screen.height / 2.0, 0, -10);
 			}
 		});
 		step(5, false, c -> {
@@ -422,7 +422,7 @@ public class HarnessClient {
 			check("song_key", sung);
 			if (!sung) {
 				// Diagnose: the key's binding, and what the Song says when called on the server for the same look
-				LOGGER.info("[harness] song key bound to {}, race {}, yaw {} pitch {}", MagesLegacyClient.ABILITY_KEYS[3].getBoundKeyTranslationKey(),
+				LOGGER.info("[harness] song key bound to {}, race {}, yaw {} pitch {}", MagesLegacyClient.ABILITY_KEYS[3].saveString(),
 						ClientRaceState.race, c.player.getYRot(), c.player.getXRot());
 				AbilityResult direct = onServer(c, s -> Bonds.song(s.getPlayerList().getPlayer(me), RaceState.get(s).data(me)));
 				LOGGER.info("[harness] the Song called on the server: {}", direct);
@@ -542,7 +542,7 @@ public class HarnessClient {
 					? be.getItem(2).getCount() : -1);
 			LOGGER.info("[harness] quickening: sand {}, iron smelted in 3 s: {}", sand, smelted);
 			LOGGER.info("[harness] quickening: furnace quickened {}, nbt {}", onServer(c, s -> Frozen.quickened(s.overworld(), arena.offset(4, 0, -3))),
-					onServer(c, s -> s.overworld().getBlockEntity(arena.offset(4, 0, -3)) instanceof AbstractFurnaceBlockEntity be ? be.saveWithoutMetadata().toString() : "none"));
+					onServer(c, s -> s.overworld().getBlockEntity(arena.offset(4, 0, -3)) instanceof AbstractFurnaceBlockEntity be ? be.saveWithoutMetadata(s.registryAccess()).toString() : "none"));
 			// A plain furnace smelts one item in 10 s; quickened, three seconds give a couple
 			check("quicken_key", sand < 95 && smelted >= 2);
 			screenshot(c, "quicken");
