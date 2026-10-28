@@ -72,4 +72,4 @@ jobs:
           gh release delete neoforge-dev --yes --cleanup-tag || true
           gh release create neoforge-dev "$JAR" screenshot.png build/harness-client/screenshots/*.png mages-legacy-updater.zip \
             --prerelease --target "$GITHUB_SHA" --title "NeoForge 1.21.1 Codex build ${{ github.run_number }}" \
-            --notes "Java 21, NeoForge 21.1.265+. Build, native GameTests and real-client harness passed. Use the isolated Codex NeoForge installer. Fabric dev releases are retained separately."
+            --notes "Java 21, NeoForge 21.1.264+. Build, native GameTests and real-client harness passed. Use the isolated Codex NeoForge installer. Fabric dev releases are retained separately."
