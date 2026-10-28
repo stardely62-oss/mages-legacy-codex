@@ -387,10 +387,15 @@ public class RaceGameTests {
 				player.moveTo(third.x, third.y, third.z, 180, -15);
 				data.readyAt.clear();
 				data.chainLeft = 0;
-				AbilityResult up = Mycelid.sporeJump(player, data);
+				Vec3 desired = player.getEyePosition().add(player.getViewVector(1).scale(Mycelid.jumpRange(data)));
+                Vec3 chosen = Mycelid.landing(player, Mycelid.jumpRange(data));
+                String diagnostic = " from=" + third + " desired=" + desired + " chosen=" + chosen + " look=" + player.getViewVector(1)
+                    + " floor=" + world.getBlockState(BlockPos.containing(desired.x, third.y - 0.5, desired.z));
+                System.out.println("[jump-test]" + diagnostic);
+                AbilityResult up = Mycelid.sporeJump(player, data);
 				ctx.runAfterDelay(Mycelid.JUMP_DELAY + 3, () -> {
 					double upward = player.position().subtract(third).horizontalDistance();
-					check(up == AbilityResult.OK && upward > 10, "a jump aimed a little up carries far, moved " + upward + " (" + up + ")");
+					check(up == AbilityResult.OK && upward > 10, "a jump aimed a little up carries far, moved " + upward + " (" + up + ")" + diagnostic);
 					check(!world.noCollision(player, player.getBoundingBox().move(0, -0.3, 0)),
 							"never left hanging in the air, now at " + player.position());
 					done(ctx, player);
