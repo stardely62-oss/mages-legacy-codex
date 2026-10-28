@@ -1,5 +1,4 @@
 package euf.mageslegacy;
-
 import euf.mageslegacy.block.MyceliumNodeBlock;
 import euf.mageslegacy.bloodkin.Bloodkin;
 import euf.mageslegacy.frozen.Frozen;
@@ -24,21 +23,6 @@ import euf.mageslegacy.shepherd.Echoes;
 import euf.mageslegacy.shepherd.Shepherd;
 import euf.mageslegacy.voidborn.Voidborn;
 import java.util.UUID;
-import net.fabricmc.api.ModInitializer;
-import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
-import net.fabricmc.fabric.api.entity.event.v1.EntitySleepEvents;
-import net.fabricmc.fabric.api.entity.event.v1.ServerEntityCombatEvents;
-import net.fabricmc.fabric.api.entity.event.v1.ServerLivingEntityEvents;
-import net.fabricmc.fabric.api.entity.event.v1.ServerPlayerEvents;
-import net.fabricmc.fabric.api.event.lifecycle.v1.ServerEntityEvents;
-import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
-import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
-import net.fabricmc.fabric.api.event.player.AttackEntityCallback;
-import net.fabricmc.fabric.api.event.player.UseEntityCallback;
-import net.fabricmc.fabric.api.event.player.UseItemCallback;
-import net.fabricmc.fabric.api.itemgroup.v1.ItemGroupEvents;
-import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
-import net.fabricmc.fabric.api.object.builder.v1.block.FabricBlockSettings;
 import net.minecraft.core.Registry;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceLocation;
@@ -58,130 +42,94 @@ import net.minecraft.world.level.material.PushReaction;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class MagesLegacy implements ModInitializer {
-	public static final String MOD_ID = "mages_legacy";
-	public static final Logger LOGGER = LoggerFactory.getLogger(MOD_ID);
-
-	/** Grown by the Mycelids' third ability; drops nothing and has no item. */
-	public static final Block MYCELIUM_NODE = Registry.register(BuiltInRegistries.BLOCK, id("mycelium_node"),
-			new MyceliumNodeBlock(FabricBlockSettings.copyOf(Blocks.RED_MUSHROOM_BLOCK).noOcclusion().noCollission()
-					.strength(0.5f).lightLevel(state -> 7).sound(SoundType.FUNGUS).pushReaction(PushReaction.DESTROY)));
-
-	/** The Scroll of Oblivion: gives back every talent point (see {@link OblivionScrollItem}). */
-	public static final Item OBLIVION_SCROLL = Registry.register(BuiltInRegistries.ITEM, id("oblivion_scroll"),
-			new OblivionScrollItem(new Item.Properties().stacksTo(16).rarity(Rarity.RARE)));
-
-	public static ResourceLocation id(String path) {
-		return ResourceLocation.fromNamespaceAndPath(MOD_ID, path);
-	}
-
-	@Override
-	public void onInitialize() {
-		Talents.init();
-		ItemGroupEvents.modifyEntriesEvent(CreativeModeTabs.TOOLS_AND_UTILITIES).register(entries -> entries.accept(OBLIVION_SCROLL));
-		ModParticles.register();
-		RacePackets.registerServerReceivers();
-		CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) -> RaceCommand.register(dispatcher));
-		ServerTickEvents.END_SERVER_TICK.register(MagesLegacy::tick);
-		// Before the worlds tick: a Voidborn rested in the pocket brings the morning (see Voidborn.tickSleep)
-		ServerTickEvents.START_SERVER_TICK.register(Voidborn::tickSleep);
-		EntitySleepEvents.ALLOW_SLEEPING.register((player, pos) -> player instanceof ServerPlayer sp && Voidborn.mayNotSleep(sp)
-				? Player.BedSleepingProblem.OTHER_PROBLEM : null);
-		ServerLifecycleEvents.SERVER_STOPPED.register(server -> {
-			Mycelid.reset();
-			Frozen.reset();
-			Bloodkin.reset();
-			Voidborn.reset();
-			Mercenary.reset();
-			Tempter.reset();
-			Masked.reset();
-			Echoes.reset();
-			Creatures.reset();
-		});
-
-		// A fresh session: send everything again, and the legend with the choice of race if there is no race yet
-		ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> server.execute(() -> {
-			RaceData data = RaceState.of(handler.player);
-			if (data != null) {
-				data.prompted = false;
-				data.dirty = true;
-			}
-			Voidborn.onJoin(handler.player);
-		}));
-		ServerPlayerEvents.AFTER_RESPAWN.register((oldPlayer, newPlayer, alive) -> {
-			RaceData data = RaceState.of(newPlayer);
-			if (data != null && !alive) {
-				data.tastes.clear();
-				RacePackets.sync(newPlayer, data);
-			}
-		});
-		// Mycelids eat raw mushrooms and fungi (right click into the air)
-		UseItemCallback.EVENT.register((player, world, hand) -> {
-			ItemStack stack = player.getItemInHand(hand);
-			if (!Mycelid.DIET.containsKey(stack.getItem())) {
-				return InteractionResultHolder.pass(stack);
-			}
-			if (world.isClientSide) {
-				return ClientRaceView.isMycelid(player) ? InteractionResultHolder.success(stack) : InteractionResultHolder.pass(stack);
-			}
-			RaceData data = RaceState.of(player);
-			if (data == null || data.race != Race.MYCELID) {
-				return InteractionResultHolder.pass(stack);
-			}
-			return Mycelid.eat((ServerPlayer) player, data, stack) ? InteractionResultHolder.success(stack) : InteractionResultHolder.fail(stack);
-		});
-		ServerLivingEntityEvents.AFTER_DEATH.register((entity, source) -> {
-			Mycelid.onDeath(entity);
-			Frozen.onDeath(entity);
-			Tempter.onDeath(entity, source);
-			Masked.onDeath(entity, source);
-		});
-		ServerLivingEntityEvents.ALLOW_DEATH.register((entity, source, amount) -> {
-			if (entity instanceof ServerPlayer player) {
-				return Mycelid.allowDeath(player) && Frozen.allowDeath(player) && Bloodkin.allowDeath(player) && Voidborn.allowDeath(player)
-						&& Mercenary.allowDeath(player) && Tempter.allowDeath(player) && Masked.allowDeath(player);
-			}
-			// Echoes fade and bonded beasts go to rest instead of dying
-			return Echoes.allowDeath(entity) && Bonds.allowDeath(entity);
-		});
-		ServerEntityCombatEvents.AFTER_KILLED_OTHER_ENTITY.register((world, killer, victim) -> {
-			if (killer instanceof ServerPlayer player) {
-				Mycelid.onKill(player, victim);
-				Bloodkin.onKill(player, victim);
-				Voidborn.onKill(player, victim);
-				Mercenary.onKill(player, victim);
-				Progression.onKill(player, victim);
-			}
-			Shepherd.onKill(killer, victim);
-		});
-		// Shepherds: the Song of Bonds and the feeding of the ritual
-		UseEntityCallback.EVENT.register((player, world, hand, entity, hit) -> {
-			if (world.isClientSide() || !(player instanceof ServerPlayer serverPlayer) || !Shepherd.is(serverPlayer)) {
-				return InteractionResult.PASS;
-			}
-			return Bonds.interact(serverPlayer, RaceState.of(serverPlayer), entity, hand);
-		});
-		// The goat's way: bare-handed headbutts at a listening goat count and do no harm
-		AttackEntityCallback.EVENT.register((player, world, hand, entity, hit) -> {
-			if (!world.isClientSide() && player instanceof ServerPlayer serverPlayer && Shepherd.is(serverPlayer)
-					&& Bonds.headbutt(serverPlayer, RaceState.of(serverPlayer), entity)) {
-				return InteractionResult.FAIL;
-			}
-			return InteractionResult.PASS;
-		});
-		// Echoes left in saved chunks go; bonded beasts get their owner and goals back
-		ServerEntityEvents.ENTITY_LOAD.register((entity, world) -> {
-			Echoes.onLoad(entity);
-			if (entity.getTags().contains(Creatures.BOND_TAG)) {
-				UUID owner = Creatures.taggedOwner(entity);
-				if (owner != null) {
-					Bonds.onLoad(entity, RaceState.get(world.getServer()).data(owner), owner);
-				}
-			}
-		});
-		LOGGER.info("Mage's Legacy loaded");
-	}
-
+@net.neoforged.fml.common.Mod(MagesLegacy.MOD_ID)
+public class MagesLegacy {
+    public static final String MOD_ID = "mages_legacy";
+    public static final Logger LOGGER = LoggerFactory.getLogger(MOD_ID);
+    private static final net.neoforged.neoforge.registries.DeferredRegister.Blocks BLOCKS = net.neoforged.neoforge.registries.DeferredRegister.createBlocks(MOD_ID);
+    private static final net.neoforged.neoforge.registries.DeferredRegister.Items ITEMS = net.neoforged.neoforge.registries.DeferredRegister.createItems(MOD_ID);
+    public static final java.util.function.Supplier<MyceliumNodeBlock> MYCELIUM_NODE = BLOCKS.register("mycelium_node", () -> new MyceliumNodeBlock(
+        net.minecraft.world.level.block.state.BlockBehaviour.Properties.ofFullCopy(Blocks.RED_MUSHROOM_BLOCK).noOcclusion().noCollission()
+            .strength(0.5f).lightLevel(state -> 7).sound(net.minecraft.world.level.block.SoundType.FUNGUS).pushReaction(PushReaction.DESTROY)));
+    public static final java.util.function.Supplier<Item> OBLIVION_SCROLL = ITEMS.register("oblivion_scroll", () -> new OblivionScrollItem(new Item.Properties().stacksTo(16).rarity(Rarity.RARE)));
+    public static ResourceLocation id(String path) { return ResourceLocation.fromNamespaceAndPath(MOD_ID, path); }
+    public MagesLegacy(net.neoforged.bus.api.IEventBus bus) {
+        BLOCKS.register(bus); ITEMS.register(bus); ModParticles.REGISTER.register(bus);
+        Talents.init(); RacePackets.registerServerReceivers();
+        bus.addListener((net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent event) -> euf.mageslegacy.platform.Network.register(event, MOD_ID,
+            "sync", "open_choice", "echoes", "faces", "quickened", "fx"));
+        bus.addListener((net.neoforged.neoforge.event.BuildCreativeModeTabContentsEvent event) -> {
+            if (event.getTabKey() == CreativeModeTabs.TOOLS_AND_UTILITIES) event.accept(OBLIVION_SCROLL.get());
+        });
+        var events = net.neoforged.neoforge.common.NeoForge.EVENT_BUS;
+        events.addListener((net.neoforged.neoforge.event.RegisterCommandsEvent event) -> RaceCommand.register(event.getDispatcher()));
+        events.addListener((net.neoforged.neoforge.event.tick.ServerTickEvent.Post event) -> tick(event.getServer()));
+        events.addListener((net.neoforged.neoforge.event.tick.ServerTickEvent.Pre event) -> Voidborn.tickSleep(event.getServer()));
+        events.addListener((net.neoforged.neoforge.event.entity.player.PlayerSleepInBedEvent event) -> {
+            if (event.getEntity() instanceof ServerPlayer player && Voidborn.mayNotSleep(player)) event.setResult(Player.BedSleepingProblem.OTHER_PROBLEM);
+        });
+        events.addListener((net.neoforged.neoforge.event.server.ServerStoppedEvent event) -> {
+            Mycelid.reset(); Frozen.reset(); Bloodkin.reset(); Voidborn.reset(); Mercenary.reset(); Tempter.reset(); Masked.reset(); Echoes.reset(); Creatures.reset();
+        });
+        events.addListener((net.neoforged.neoforge.event.entity.player.PlayerEvent.PlayerLoggedInEvent event) -> {
+            if (!(event.getEntity() instanceof ServerPlayer player)) return;
+            RaceData data = RaceState.of(player);
+            if (data != null) { data.prompted = false; data.dirty = true; }
+            Voidborn.onJoin(player);
+        });
+        events.addListener((net.neoforged.neoforge.event.entity.player.PlayerEvent.PlayerRespawnEvent event) -> {
+            if (!(event.getEntity() instanceof ServerPlayer player)) return;
+            RaceData data = RaceState.of(player);
+            if (data != null && !event.isEndConquered()) { data.tastes.clear(); RacePackets.sync(player, data); }
+        });
+        events.addListener((net.neoforged.neoforge.event.entity.player.PlayerInteractEvent.RightClickItem event) -> {
+            Player player = event.getEntity();
+            ItemStack stack = player.getItemInHand(event.getHand());
+            if (!Mycelid.DIET.containsKey(stack.getItem())) return;
+            if (player.level().isClientSide()) {
+                if (ClientRaceView.isMycelid(player)) { event.setCanceled(true); event.setCancellationResult(InteractionResult.SUCCESS); }
+                return;
+            }
+            RaceData data = RaceState.of(player);
+            if (data == null || data.race != Race.MYCELID) return;
+            event.setCanceled(true);
+            event.setCancellationResult(Mycelid.eat((ServerPlayer) player, data, stack) ? InteractionResult.SUCCESS : InteractionResult.FAIL);
+        });
+        events.addListener((net.neoforged.neoforge.event.entity.living.LivingDeathEvent event) -> {
+            var entity = event.getEntity();
+            if (entity.level().isClientSide()) return;
+            boolean allow = entity instanceof ServerPlayer player
+                ? Mycelid.allowDeath(player) && Frozen.allowDeath(player) && Bloodkin.allowDeath(player) && Voidborn.allowDeath(player)
+                    && Mercenary.allowDeath(player) && Tempter.allowDeath(player) && Masked.allowDeath(player)
+                : Echoes.allowDeath(entity) && Bonds.allowDeath(entity);
+            if (!allow) { event.setCanceled(true); return; }
+            Mycelid.onDeath(entity); Frozen.onDeath(entity); Tempter.onDeath(entity, event.getSource()); Masked.onDeath(entity, event.getSource());
+            if (event.getSource().getEntity() instanceof net.minecraft.world.entity.LivingEntity killer) {
+                if (killer instanceof ServerPlayer player) {
+                    Mycelid.onKill(player, entity); Bloodkin.onKill(player, entity); Voidborn.onKill(player, entity);
+                    Mercenary.onKill(player, entity); Progression.onKill(player, entity);
+                }
+                Shepherd.onKill(killer, entity);
+            }
+        });
+        events.addListener((net.neoforged.neoforge.event.entity.player.PlayerInteractEvent.EntityInteract event) -> {
+            if (!(event.getEntity() instanceof ServerPlayer player) || !Shepherd.is(player)) return;
+            InteractionResult result = Bonds.interact(player, RaceState.of(player), event.getTarget(), event.getHand());
+            if (result != InteractionResult.PASS) { event.setCanceled(true); event.setCancellationResult(result); }
+        });
+        events.addListener((net.neoforged.neoforge.event.entity.player.AttackEntityEvent event) -> {
+            if (event.getEntity() instanceof ServerPlayer player && Shepherd.is(player) && Bonds.headbutt(player, RaceState.of(player), event.getTarget())) event.setCanceled(true);
+        });
+        events.addListener((net.neoforged.neoforge.event.entity.EntityJoinLevelEvent event) -> {
+            if (!(event.getLevel() instanceof net.minecraft.server.level.ServerLevel world)) return;
+            var entity = event.getEntity(); Echoes.onLoad(entity);
+            if (entity.getTags().contains(Creatures.BOND_TAG)) {
+                UUID owner = Creatures.taggedOwner(entity);
+                if (owner != null) Bonds.onLoad(entity, RaceState.get(world.getServer()).data(owner), owner);
+            }
+        });
+        LOGGER.info("Mage's Legacy loaded on NeoForge 1.21.1");
+    }
 	private static void tick(MinecraftServer server) {
 		Mycelid.tick(server);
 		Frozen.tick(server);

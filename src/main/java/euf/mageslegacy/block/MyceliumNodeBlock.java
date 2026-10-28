@@ -55,7 +55,7 @@ public class MyceliumNodeBlock extends Block {
 	@Override
 	public void animateTick(BlockState state, Level world, BlockPos pos, RandomSource random) {
 		for (int i = 0; i < 4; i++) {
-			world.addParticle(ModParticles.SPORE, pos.getX() + 0.5 + (random.nextDouble() - 0.5) * 0.8, pos.getY() + 0.4 + random.nextDouble() * 0.6,
+			world.addParticle(ModParticles.SPORE.get(), pos.getX() + 0.5 + (random.nextDouble() - 0.5) * 0.8, pos.getY() + 0.4 + random.nextDouble() * 0.6,
 					pos.getZ() + 0.5 + (random.nextDouble() - 0.5) * 0.8, 0, 0.02, 0);
 		}
 		if (random.nextInt(3) == 0) {

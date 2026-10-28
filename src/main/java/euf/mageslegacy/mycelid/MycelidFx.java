@@ -24,8 +24,8 @@ public final class MycelidFx {
 
 	/** Bright spores that wither to violet as they fall. */
 	/** Glowing spores (the race's own particle): they float up, sway and burst. */
-	public static final ParticleOptions SPORE = ModParticles.SPORE;
-	public static final ParticleOptions SPORE_BIG = ModParticles.SPORE;
+	public static final ParticleOptions SPORE = ModParticles.SPORE.get();
+	public static final ParticleOptions SPORE_BIG = ModParticles.SPORE.get();
 	public static final ParticleOptions MOSS_DUST = new DustParticleOptions(MOSS, 1.2f);
 	public static final ParticleOptions BONE_DUST = new DustParticleOptions(BONE, 0.8f);
 

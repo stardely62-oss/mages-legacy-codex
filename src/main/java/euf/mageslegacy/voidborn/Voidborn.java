@@ -209,7 +209,7 @@ public final class Voidborn {
 		// Water burns them as it burns the endermen; rain saps them
 		if (world.getFluidState(player.blockPosition()).is(FluidTags.WATER) || world.getFluidState(BlockPos.containing(player.getEyePosition())).is(FluidTags.WATER)) {
 			player.hurt(world.damageSources().magic(), data.has(Talents.POCKET_WATER) ? 1 : 2);
-			world.sendParticles(ModParticles.VOID_MOTE, player.getX(), player.getY() + 1, player.getZ(), 8, 0.3, 0.5, 0.3, 0.02);
+			world.sendParticles(ModParticles.VOID_MOTE.get(), player.getX(), player.getY() + 1, player.getZ(), 8, 0.3, 0.5, 0.3, 0.02);
 			world.playSound(null, player.blockPosition(), SoundEvents.FIRE_EXTINGUISH, SoundSource.PLAYERS, 0.5f, 1.4f);
 		} else if (world.isRainingAt(BlockPos.containing(player.getEyePosition()))) {
 			refresh(player, MobEffects.WEAKNESS, 60);
@@ -239,7 +239,7 @@ public final class Voidborn {
 		}
 		if (source.is(DamageTypeTags.IS_PROJECTILE) && player.getRandom().nextFloat() < PROJECTILE_PASS) {
 			ServerLevel world = player.serverLevel();
-			world.sendParticles(ModParticles.VOID_MOTE, player.getX(), player.getY() + 1.2, player.getZ(), 10, 0.25, 0.4, 0.25, 0.03);
+			world.sendParticles(ModParticles.VOID_MOTE.get(), player.getX(), player.getY() + 1.2, player.getZ(), 10, 0.25, 0.4, 0.25, 0.03);
 			world.playSound(null, player.blockPosition(), SoundEvents.ENDERMAN_TELEPORT, SoundSource.PLAYERS, 0.4f, 1.8f);
 			return true;
 		}
@@ -370,7 +370,7 @@ public final class Voidborn {
 		Fx.phase(player, STEP_TICKS);
 		Fx.voidScreen(player, STEP_TICKS + 4);
 		Fx.fov(player, 0.3f, STEP_TICKS + 6);
-		world.sendParticles(ModParticles.VOID_MOTE, start.x, start.y + 1, start.z, 24, 0.4, 0.7, 0.4, 0.06);
+		world.sendParticles(ModParticles.VOID_MOTE.get(), start.x, start.y + 1, start.z, 24, 0.4, 0.7, 0.4, 0.06);
 		world.playSound(null, player.blockPosition(), SoundEvents.ENDERMAN_TELEPORT, SoundSource.PLAYERS, 1.0f, 0.5f);
 		world.playSound(null, player.blockPosition(), SoundEvents.RESPAWN_ANCHOR_DEPLETE.value(), SoundSource.PLAYERS, 0.6f, 1.6f);
 		return AbilityResult.OK;
@@ -464,8 +464,8 @@ public final class Voidborn {
 			}
 			for (int i = 0; i <= 3; i++) {
 				Vec3 p = a.lerp(b, i / 3.0);
-				world.sendParticles(ModParticles.VOID_MOTE, p.x, p.y + 1, p.z, 2, 0.25, 0.5, 0.25, 0.02);
-				world.sendParticles(ModParticles.STAR, p.x, p.y + 1, p.z, 1, 0.4, 0.6, 0.4, 0.0);
+				world.sendParticles(ModParticles.VOID_MOTE.get(), p.x, p.y + 1, p.z, 2, 0.25, 0.5, 0.25, 0.02);
+				world.sendParticles(ModParticles.STAR.get(), p.x, p.y + 1, p.z, 1, 0.4, 0.6, 0.4, 0.0);
 			}
 			player.setDeltaMovement(Vec3.ZERO);
 			player.fallDistance = 0;
@@ -517,8 +517,8 @@ public final class Voidborn {
 			}
 			Fx.vortex(world, at.add(0, 1, 0), 1.4f, 16, VOID_RGB);
 		}
-		world.sendParticles(ModParticles.VOID_MOTE, at.x, at.y + 1, at.z, 30, 0.2, 0.4, 0.2, 0.12);
-		world.sendParticles(ModParticles.STAR, at.x, at.y + 1, at.z, 12, 0.6, 0.8, 0.6, 0.0);
+		world.sendParticles(ModParticles.VOID_MOTE.get(), at.x, at.y + 1, at.z, 30, 0.2, 0.4, 0.2, 0.12);
+		world.sendParticles(ModParticles.STAR.get(), at.x, at.y + 1, at.z, 12, 0.6, 0.8, 0.6, 0.0);
 		world.playSound(null, player.blockPosition(), SoundEvents.ENDERMAN_TELEPORT, SoundSource.PLAYERS, 1.0f, 1.2f);
 		if (through) {
 			Progression.addXp(player, RaceState.of(player), "voidborn_step", 1, 20);
@@ -603,7 +603,7 @@ public final class Voidborn {
 				}
 			}
 			if (now % 4 == 0) {
-				world.sendParticles(ModParticles.STAR, w.center().x, w.center().y, w.center().z, 2, 1.5, 1.5, 1.5, 0.0);
+				world.sendParticles(ModParticles.STAR.get(), w.center().x, w.center().y, w.center().z, 2, 1.5, 1.5, 1.5, 0.0);
 			}
 			if (w.until() <= now) {
 				it.remove();
@@ -647,8 +647,8 @@ public final class Voidborn {
 		}
 		Fx.burst(world, c, 4.0f, 9, VOID_RGB);
 		Fx.ring(world, ground(world, c), 6, 0.3f, 10, VOID_INK);
-		world.sendParticles(ModParticles.VOID_MOTE, c.x, c.y, c.z, 40, 0.3, 0.3, 0.3, 0.25);
-		world.sendParticles(ModParticles.STAR, c.x, c.y, c.z, 20, 1.2, 1.2, 1.2, 0.0);
+		world.sendParticles(ModParticles.VOID_MOTE.get(), c.x, c.y, c.z, 40, 0.3, 0.3, 0.3, 0.25);
+		world.sendParticles(ModParticles.STAR.get(), c.x, c.y, c.z, 20, 1.2, 1.2, 1.2, 0.0);
 		world.playSound(null, BlockPos.containing(c), SoundEvents.GENERIC_EXPLODE, SoundSource.PLAYERS, 0.7f, 0.5f);
 		world.playSound(null, BlockPos.containing(c), SoundEvents.BEACON_DEACTIVATE, SoundSource.PLAYERS, 1.0f, 0.6f);
 	}
@@ -751,7 +751,7 @@ public final class Voidborn {
 			double y = (world.getRandom().nextDouble() - 0.5) * 2;
 			Vec3 out = new Vec3(Math.cos(a) * 1.6, y, Math.sin(a) * 1.6);
 			Vec3 at = c.add(out);
-			world.sendParticles(ModParticles.VOID_MOTE, at.x, at.y, at.z, 0, -out.x * 0.12, -out.y * 0.12, -out.z * 0.12, 1);
+			world.sendParticles(ModParticles.VOID_MOTE.get(), at.x, at.y, at.z, 0, -out.x * 0.12, -out.y * 0.12, -out.z * 0.12, 1);
 		}
 	}
 
@@ -848,7 +848,7 @@ public final class Voidborn {
 			Vec3 c = h.pos().add(0, back.getBbHeight() / 2, 0);
 			Fx.rift(world, c, back.getBbHeight() + 1.2f, back.getBbWidth() + 1.0f, 16, VOID_RGB);
 			Fx.burst(world, c, 1.2f + back.getBbWidth(), 7, VOID_RGB);
-			world.sendParticles(ModParticles.VOID_MOTE, c.x, c.y, c.z, 24, 0.2, 0.3, 0.2, 0.14);
+			world.sendParticles(ModParticles.VOID_MOTE.get(), c.x, c.y, c.z, 24, 0.2, 0.3, 0.2, 0.14);
 			world.playSound(null, BlockPos.containing(h.pos()), SoundEvents.CHORUS_FRUIT_TELEPORT, SoundSource.PLAYERS, 1.2f, 0.8f);
 			if (back instanceof LivingEntity living) {
 				if (h.ally()) {
@@ -927,7 +927,7 @@ public final class Voidborn {
 			ServerLevel world = player.serverLevel();
 			Vec3 at = player.position().add(0, 1.3, 0);
 			Fx.rift(world, at, 2.8f, 1.7f, 14, VOID_RGB);
-			world.sendParticles(ModParticles.STAR, at.x, at.y, at.z, 20, 0.8, 1.0, 0.8, 0.0);
+			world.sendParticles(ModParticles.STAR.get(), at.x, at.y, at.z, 20, 0.8, 1.0, 0.8, 0.0);
 			world.playSound(null, player.blockPosition(), SoundEvents.ENDERMAN_TELEPORT, SoundSource.PLAYERS, 0.8f, 1.2f);
 		}
 	}

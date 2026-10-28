@@ -497,7 +497,7 @@ public final class Fx {
 	private static void send(ServerLevel world, Vec3 at, FriendlyByteBuf buf) {
 		for (ServerPlayer player : world.players()) {
 			if (player.distanceToSqr(at) < RANGE * RANGE && Server.canSend(player, RacePackets.FX)) {
-				Server.send(player, RacePackets.FX, PacketByteBufs.copy(buf));
+				Server.send(player, RacePackets.FX, new FriendlyByteBuf(buf.copy()));
 			}
 		}
 	}

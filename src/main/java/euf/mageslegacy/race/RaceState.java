@@ -27,7 +27,7 @@ public class RaceState extends SavedData {
 	private final Map<UUID, List<GlobalPos>> nodes = new HashMap<>();
 
 	public static RaceState get(MinecraftServer server) {
-		return server.overworld().getDataStorage().computeIfAbsent(RaceState::fromNbt, RaceState::new, MagesLegacy.MOD_ID);
+		return server.overworld().getDataStorage().computeIfAbsent(new SavedData.Factory<>(RaceState::new, (tag, registries) -> fromNbt(tag), null), MagesLegacy.MOD_ID);
 	}
 
 	/** The player's data, or null on the client or before the server is up. */
@@ -68,7 +68,7 @@ public class RaceState extends SavedData {
 	}
 
 	@Override
-	public CompoundTag save(CompoundTag nbt) {
+	public CompoundTag save(CompoundTag nbt, net.minecraft.core.HolderLookup.Provider registries) {
 		CompoundTag playerTag = new CompoundTag();
 		players.forEach((id, data) -> playerTag.put(id.toString(), data.toNbt()));
 		nbt.put("players", playerTag);

@@ -155,7 +155,7 @@ public final class Mycelid {
 		}
 		BlockState below = player.level().getBlockState(player.blockPosition().below());
 		return below.is(Blocks.MYCELIUM) || below.is(Blocks.PODZOL) || below.is(Blocks.RED_MUSHROOM_BLOCK)
-				|| below.is(Blocks.BROWN_MUSHROOM_BLOCK) || below.is(Blocks.MUSHROOM_STEM) || below.is(MagesLegacy.MYCELIUM_NODE);
+				|| below.is(Blocks.BROWN_MUSHROOM_BLOCK) || below.is(Blocks.MUSHROOM_STEM) || below.is(MagesLegacy.MYCELIUM_NODE.get());
 	}
 
 	/** Lands where no rain falls: deserts, savannas, badlands, the Nether and the End. */
@@ -340,7 +340,7 @@ public final class Mycelid {
 		ServerLevel world = player.serverLevel();
 		GlobalPos nearest = null;
 		for (GlobalPos node : RaceState.get(player.getServer()).nodes(player.getUUID())) {
-			if (node.dimension().equals(world.dimension()) && world.getBlockState(node.pos()).is(MagesLegacy.MYCELIUM_NODE)
+			if (node.dimension().equals(world.dimension()) && world.getBlockState(node.pos()).is(MagesLegacy.MYCELIUM_NODE.get())
 					&& (nearest == null || node.pos().distToCenterSqr(player.position()) < nearest.pos().distToCenterSqr(player.position()))) {
 				nearest = node;
 			}
@@ -710,12 +710,12 @@ public final class Mycelid {
 	public static void placeNodeAt(ServerLevel world, BlockPos pos, UUID owner, int limit) {
 		RaceState state = RaceState.get(world.getServer());
 		List<GlobalPos> nodes = state.nodes(owner);
-		world.setBlockAndUpdate(pos, MagesLegacy.MYCELIUM_NODE.defaultBlockState());
+		world.setBlockAndUpdate(pos, MagesLegacy.MYCELIUM_NODE.get().defaultBlockState());
 		nodes.add(GlobalPos.of(world.dimension(), pos));
 		while (nodes.size() > limit) {
 			GlobalPos old = nodes.remove(0);
 			ServerLevel oldWorld = world.getServer().getLevel(old.dimension());
-			if (oldWorld != null && oldWorld.getBlockState(old.pos()).is(MagesLegacy.MYCELIUM_NODE)) {
+			if (oldWorld != null && oldWorld.getBlockState(old.pos()).is(MagesLegacy.MYCELIUM_NODE.get())) {
 				oldWorld.removeBlock(old.pos(), false);
 			}
 		}
@@ -744,7 +744,7 @@ public final class Mycelid {
 		for (int i = 1; i < nodes.size(); i++) {
 			GlobalPos next = nodes.get((start + i) % nodes.size());
 			if (next.dimension().equals(world.dimension()) && next.pos().closerThan(from, range)
-					&& world.getBlockState(next.pos()).is(MagesLegacy.MYCELIUM_NODE)) {
+					&& world.getBlockState(next.pos()).is(MagesLegacy.MYCELIUM_NODE.get())) {
 				Vec3 to = Vec3.atBottomCenterOf(next.pos().above());
 				MycelidFx.column(world, player.position());
 				// Carried through the mycelium: a streak from node to node, a burst where the body comes up
@@ -755,7 +755,7 @@ public final class Mycelid {
 				player.fallDistance = 0;
 				MycelidFx.column(world, to);
 				MycelidFx.ring(world, to, 0.3, 1.8, 6, MycelidFx.SPORE);
-				world.sendParticles(ModParticles.SPORE, to.x, to.y + 0.5, to.z, 40, 0.5, 1.0, 0.5, 0.02);
+				world.sendParticles(ModParticles.SPORE.get(), to.x, to.y + 0.5, to.z, 40, 0.5, 1.0, 0.5, 0.02);
 				world.playSound(null, next.pos(), SoundEvents.FUNGUS_PLACE, SoundSource.BLOCKS, 1.0f, 0.6f);
 				RaceData travellerData = RaceState.of(player);
 				// No race experience for travelling: walking back and forth between two nodes would farm it. For the
@@ -823,7 +823,7 @@ public final class Mycelid {
 			Fx.shake(player, 1.0f, 6);
 			// The arc of the jump stays a moment as a trail of spores drifting down
 			for (Vec3 p : arcPath(jump.from(), jump.target())) {
-				world.sendParticles(ModParticles.SPORE, p.x, p.y + 1, p.z, 2, 0.12, 0.12, 0.12, 0.01);
+				world.sendParticles(ModParticles.SPORE.get(), p.x, p.y + 1, p.z, 2, 0.12, 0.12, 0.12, 0.01);
 			}
 			world.playSound(null, player.blockPosition(), SoundEvents.FUNGUS_PLACE, SoundSource.PLAYERS, 1.0f, 1.2f);
 			world.playSound(null, player.blockPosition(), SoundEvents.MOSS_PLACE, SoundSource.PLAYERS, 0.8f, 0.8f);
@@ -874,7 +874,7 @@ public final class Mycelid {
 						friend.addEffect(new MobEffectInstance(MobEffects.REGENERATION, 40, 0, true, false, true));
 					}
 				}
-				carpet.world().sendParticles(ModParticles.SPORE, c.x, c.y + 0.2, c.z, 12, r * 0.5, 0.1, r * 0.5, 0.01);
+				carpet.world().sendParticles(ModParticles.SPORE.get(), c.x, c.y + 0.2, c.z, 12, r * 0.5, 0.1, r * 0.5, 0.01);
 			}
 		}
 
@@ -889,7 +889,7 @@ public final class Mycelid {
 			if (now % 3 == 0) {
 				double r = cloud.radius();
 				// Glowing spores drift up through the cloud (they live a few seconds, so a few at a time are plenty)
-				world.sendParticles(ModParticles.SPORE, c.x, c.y + 0.5, c.z, (int) (r * r * 0.4), r * 0.5, 0.5, r * 0.5, 0.0);
+				world.sendParticles(ModParticles.SPORE.get(), c.x, c.y + 0.5, c.z, (int) (r * r * 0.4), r * 0.5, 0.5, r * 0.5, 0.0);
 				world.sendParticles(ParticleTypes.SPORE_BLOSSOM_AIR, c.x, c.y + 1.2, c.z, (int) (r * 4), r * 0.5, 0.6, r * 0.5, 0.0);
 				MycelidFx.vortex(world, c, r, now - cloud.start());
 				// The edge of the cloud, so it's clear where it ends

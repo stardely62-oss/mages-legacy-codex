@@ -203,12 +203,12 @@ public final class Bonds {
 		for (int i = 0; i < 18; i++) {
 			Vec3 at = from.add(way.scale(i / 18.0 * 0.4));
 			Vec3 push = way.scale(0.06 + world.getRandom().nextDouble() * 0.015);
-			world.sendParticles(ModParticles.MOTE, at.x, at.y, at.z, 0, push.x, push.y, push.z, 1);
+			world.sendParticles(ModParticles.MOTE.get(), at.x, at.y, at.z, 0, push.x, push.y, push.z, 1);
 		}
 		for (int i = 0; i < 10; i++) {
 			double a = Math.PI * 2 * i / 10;
 			double r = Math.max(0.6, mob.getBbWidth());
-			world.sendParticles(ModParticles.MOTE, to.x + Math.cos(a) * r, to.y, to.z + Math.sin(a) * r, 0, -Math.sin(a) * 0.06, 0.02,
+			world.sendParticles(ModParticles.MOTE.get(), to.x + Math.cos(a) * r, to.y, to.z + Math.sin(a) * r, 0, -Math.sin(a) * 0.06, 0.02,
 					Math.cos(a) * 0.06, 1);
 		}
 		world.playSound(null, mob.blockPosition(), SoundEvents.NOTE_BLOCK_FLUTE.value(), SoundSource.PLAYERS, 1.0f, 0.8f);

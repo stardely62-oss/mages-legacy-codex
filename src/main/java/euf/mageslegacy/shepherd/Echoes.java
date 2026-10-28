@@ -55,7 +55,7 @@ public final class Echoes {
 	private static final UUID STURDY = UUID.fromString("3c9d2b7e-6a14-4f0b-9e2d-5b8c1a7f4e33");
 	private static final UUID WEAPONS = UUID.fromString("8e1f4a2c-7b35-4d9e-a6c0-2f5b9d3e1a44");
 	/** Spirit wisps (the race's own particle): pale cyan flames that rise and flicker. */
-	public static final ParticleOptions SPIRIT = ModParticles.WISP;
+	public static final ParticleOptions SPIRIT = ModParticles.WISP.get();
 
 	/** A living echo: whose, what kind, in which world, until when (world time), and what it cost. */
 	public record Echo(UUID owner, String type, ResourceKey<Level> world, long expiresAt, boolean temporary, int voice) {}

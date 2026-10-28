@@ -1210,11 +1210,11 @@ public final class FxRenderer {
 			super(ticks, rgb);
 			this.around = around;
 			this.particle = switch (kind) {
-				case Fx.GRAINS -> ModParticles.SAND;
-				case Fx.SPORES -> ModParticles.SPORE;
-				case Fx.WISPS -> ModParticles.WISP;
-				case Fx.MOTES -> ModParticles.MOTE;
-				default -> ModParticles.EMBER;
+				case Fx.GRAINS -> ModParticles.SAND.get();
+				case Fx.SPORES -> ModParticles.SPORE.get();
+				case Fx.WISPS -> ModParticles.WISP.get();
+				case Fx.MOTES -> ModParticles.MOTE.get();
+				default -> ModParticles.EMBER.get();
 			};
 		}
 
@@ -1232,8 +1232,8 @@ public final class FxRenderer {
 				world.addParticle(particle, e.getX() + Math.cos(angle) * r, e.getY() + world.random.nextDouble() * e.getBbHeight(),
 						e.getZ() + Math.sin(angle) * r, 0, 0, 0);
 			}
-			if (particle == ModParticles.EMBER && age % 4 == 0) {
-				world.addParticle(ModParticles.BLOOD_MIST, e.getX(), e.getY() + 0.2, e.getZ(), (world.random.nextDouble() - 0.5) * 0.08, 0,
+			if (particle == ModParticles.EMBER.get() && age % 4 == 0) {
+				world.addParticle(ModParticles.BLOOD_MIST.get(), e.getX(), e.getY() + 0.2, e.getZ(), (world.random.nextDouble() - 0.5) * 0.08, 0,
 						(world.random.nextDouble() - 0.5) * 0.08);
 			}
 		}
@@ -1271,7 +1271,7 @@ public final class FxRenderer {
 			}
 			// The swarm leaves a smear of mist where it passes
 			if (age % 2 == 0) {
-				client.level.addParticle(ModParticles.BLOOD_MIST, e.getX(), e.getY() + 0.6 + client.level.random.nextDouble(), e.getZ(), 0, 0, 0);
+				client.level.addParticle(ModParticles.BLOOD_MIST.get(), e.getX(), e.getY() + 0.6 + client.level.random.nextDouble(), e.getZ(), 0, 0, 0);
 			}
 		}
 
@@ -1454,12 +1454,12 @@ public final class FxRenderer {
 				Vec3 p = at.add(dir.scale(radius * (2 + client.level.random.nextDouble())));
 				Vec3 tangent = dir.cross(new Vec3(0, 1, 0));
 				Vec3 v = dir.scale(-0.22).add(tangent.scale(0.12));
-				client.level.addParticle(ModParticles.VOID_MOTE, p.x, p.y, p.z, v.x, v.y, v.z);
+				client.level.addParticle(ModParticles.VOID_MOTE.get(), p.x, p.y, p.z, v.x, v.y, v.z);
 			}
 			if (age % 2 == 0) {
 				double a = client.level.random.nextDouble() * Math.PI * 2;
 				Vec3 p = at.add(e1.scale(Math.cos(a) * radius * 1.4)).add(e2.scale(Math.sin(a) * radius * 1.4));
-				client.level.addParticle(ModParticles.STAR, p.x, p.y, p.z, 0, 0, 0);
+				client.level.addParticle(ModParticles.STAR.get(), p.x, p.y, p.z, 0, 0, 0);
 			}
 		}
 
@@ -1842,7 +1842,7 @@ public final class FxRenderer {
 			}
 			Vec3 head = at(share(age));
 			for (int i = 0; i < 3; i++) {
-				client.level.addParticle(ModParticles.SPORE, head.x, head.y, head.z, (client.level.random.nextDouble() - 0.5) * 0.06, 0,
+				client.level.addParticle(ModParticles.SPORE.get(), head.x, head.y, head.z, (client.level.random.nextDouble() - 0.5) * 0.06, 0,
 						(client.level.random.nextDouble() - 0.5) * 0.06);
 			}
 		}

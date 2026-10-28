@@ -22,19 +22,19 @@ public final class RaceParticles {
 
 	public static void register() {
 		ParticleFactoryRegistry registry = ParticleFactoryRegistry.getInstance();
-		registry.register(ModParticles.SAND, sprites -> (type, world, x, y, z, vx, vy, vz) -> new Sand(world, x, y, z, vx, vy, vz, sprites, false));
-		registry.register(ModParticles.STILL_SAND, sprites -> (type, world, x, y, z, vx, vy, vz) -> new Sand(world, x, y, z, vx, vy, vz, sprites, true));
-		registry.register(ModParticles.ICE_SHARD, sprites -> (type, world, x, y, z, vx, vy, vz) -> new Shard(world, x, y, z, vx, vy, vz, sprites));
-		registry.register(ModParticles.SPORE, sprites -> (type, world, x, y, z, vx, vy, vz) -> new Spore(world, x, y, z, vx, vy, vz, sprites));
-		registry.register(ModParticles.WISP, sprites -> (type, world, x, y, z, vx, vy, vz) -> new Wisp(world, x, y, z, vx, vy, vz, sprites));
-		registry.register(ModParticles.MOTE, sprites -> (type, world, x, y, z, vx, vy, vz) -> new Mote(world, x, y, z, vx, vy, vz, sprites));
-		registry.register(ModParticles.BLOOD, sprites -> (type, world, x, y, z, vx, vy, vz) -> new Drop(world, x, y, z, vx, vy, vz, sprites));
-		registry.register(ModParticles.BLOOD_MOTE, sprites -> (type, world, x, y, z, vx, vy, vz) -> new Mote(world, x, y, z, vx, vy, vz, sprites));
-		registry.register(ModParticles.EMBER, sprites -> (type, world, x, y, z, vx, vy, vz) -> new Ember(world, x, y, z, vx, vy, vz, sprites));
-		registry.register(ModParticles.BLOOD_MIST, sprites -> (type, world, x, y, z, vx, vy, vz) -> new Mist(world, x, y, z, vx, vy, vz, sprites));
-		registry.register(ModParticles.VOID_MOTE, sprites -> (type, world, x, y, z, vx, vy, vz) -> new VoidMote(world, x, y, z, vx, vy, vz, sprites));
-		registry.register(ModParticles.STAR, sprites -> (type, world, x, y, z, vx, vy, vz) -> new Star(world, x, y, z, vx, vy, vz, sprites));
-		registry.register(ModParticles.BAT, sprites -> {
+		registry.register(ModParticles.SAND.get(), sprites -> (type, world, x, y, z, vx, vy, vz) -> new Sand(world, x, y, z, vx, vy, vz, sprites, false));
+		registry.register(ModParticles.STILL_SAND.get(), sprites -> (type, world, x, y, z, vx, vy, vz) -> new Sand(world, x, y, z, vx, vy, vz, sprites, true));
+		registry.register(ModParticles.ICE_SHARD.get(), sprites -> (type, world, x, y, z, vx, vy, vz) -> new Shard(world, x, y, z, vx, vy, vz, sprites));
+		registry.register(ModParticles.SPORE.get(), sprites -> (type, world, x, y, z, vx, vy, vz) -> new Spore(world, x, y, z, vx, vy, vz, sprites));
+		registry.register(ModParticles.WISP.get(), sprites -> (type, world, x, y, z, vx, vy, vz) -> new Wisp(world, x, y, z, vx, vy, vz, sprites));
+		registry.register(ModParticles.MOTE.get(), sprites -> (type, world, x, y, z, vx, vy, vz) -> new Mote(world, x, y, z, vx, vy, vz, sprites));
+		registry.register(ModParticles.BLOOD.get(), sprites -> (type, world, x, y, z, vx, vy, vz) -> new Drop(world, x, y, z, vx, vy, vz, sprites));
+		registry.register(ModParticles.BLOOD_MOTE.get(), sprites -> (type, world, x, y, z, vx, vy, vz) -> new Mote(world, x, y, z, vx, vy, vz, sprites));
+		registry.register(ModParticles.EMBER.get(), sprites -> (type, world, x, y, z, vx, vy, vz) -> new Ember(world, x, y, z, vx, vy, vz, sprites));
+		registry.register(ModParticles.BLOOD_MIST.get(), sprites -> (type, world, x, y, z, vx, vy, vz) -> new Mist(world, x, y, z, vx, vy, vz, sprites));
+		registry.register(ModParticles.VOID_MOTE.get(), sprites -> (type, world, x, y, z, vx, vy, vz) -> new VoidMote(world, x, y, z, vx, vy, vz, sprites));
+		registry.register(ModParticles.STAR.get(), sprites -> (type, world, x, y, z, vx, vy, vz) -> new Star(world, x, y, z, vx, vy, vz, sprites));
+		registry.register(ModParticles.BAT.get(), sprites -> {
 			batSprites = sprites;
 			return (type, world, x, y, z, vx, vy, vz) -> new Bat(world, x, y, z, vx, vy, vz, sprites, null);
 		});

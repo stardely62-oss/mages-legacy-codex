@@ -65,10 +65,10 @@ public class MagesLegacyClient implements ClientModInitializer {
 
 	@Override
 	public void onInitializeClient() {
-		BlockRenderLayerMap.INSTANCE.putBlock(MagesLegacy.MYCELIUM_NODE, RenderType.cutout());
+		BlockRenderLayerMap.INSTANCE.putBlock(MagesLegacy.MYCELIUM_NODE.get(), RenderType.cutout());
 		RaceParticles.register();
 		Client.registerGlobalReceiver(RacePackets.SYNC, (client, handler, buf, sender) -> {
-			FriendlyByteBuf copy = PacketByteBufs.copy(buf);
+			FriendlyByteBuf copy = new FriendlyByteBuf(buf.copy());
 			client.execute(() -> {
 				ClientRaceState.read(copy);
 				// The choice was made (here or by an operator): the lore and choice screens are done
@@ -78,19 +78,19 @@ public class MagesLegacyClient implements ClientModInitializer {
 			});
 		});
 		Client.registerGlobalReceiver(RacePackets.ECHOES, (client, handler, buf, sender) -> {
-			FriendlyByteBuf copy = PacketByteBufs.copy(buf);
+			FriendlyByteBuf copy = new FriendlyByteBuf(buf.copy());
 			client.execute(() -> EchoVisuals.read(copy));
 		});
 		Client.registerGlobalReceiver(RacePackets.FACES, (client, handler, buf, sender) -> {
-			FriendlyByteBuf copy = PacketByteBufs.copy(buf);
+			FriendlyByteBuf copy = new FriendlyByteBuf(buf.copy());
 			client.execute(() -> FaceVisuals.read(copy));
 		});
 		Client.registerGlobalReceiver(RacePackets.QUICKENED, (client, handler, buf, sender) -> {
-			FriendlyByteBuf copy = PacketByteBufs.copy(buf);
+			FriendlyByteBuf copy = new FriendlyByteBuf(buf.copy());
 			client.execute(() -> QuickenVisuals.read(copy));
 		});
 		Client.registerGlobalReceiver(RacePackets.FX, (client, handler, buf, sender) -> {
-			FriendlyByteBuf copy = PacketByteBufs.copy(buf);
+			FriendlyByteBuf copy = new FriendlyByteBuf(buf.copy());
 			client.execute(() -> FxRenderer.read(copy));
 		});
 		Client.registerGlobalReceiver(RacePackets.OPEN_CHOICE, (client, handler, buf, sender) ->

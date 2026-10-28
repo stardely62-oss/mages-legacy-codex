@@ -114,8 +114,8 @@ public final class Frozen {
 	private static final int SAND_RGB = 0xE8C98A;
 	private static final int STILL_RGB = 0xE8F4FF;
 	/** Ice shards and grains of sand (the race's own particles); fine ice dust for the frozen silhouette. */
-	private static final ParticleOptions ICE = ModParticles.ICE_SHARD;
-	private static final ParticleOptions SAND = ModParticles.SAND;
+	private static final ParticleOptions ICE = ModParticles.ICE_SHARD.get();
+	private static final ParticleOptions SAND = ModParticles.SAND.get();
 	private static final DustParticleOptions ICE_DUST = new DustParticleOptions(new Vector3f(0.62f, 0.80f, 0.95f), 1.2f);
 
 	/** Where every player was, newest last: one point a tick, a few seconds deep. */
@@ -870,7 +870,7 @@ public final class Frozen {
 			double theta = random.nextDouble() * Math.PI * 2;
 			double r = Math.sqrt(random.nextDouble()) * d.radius * 0.9;
 			double y = random.nextDouble() * d.radius * 0.7;
-			d.world.sendParticles(ModParticles.STILL_SAND, d.center.x + Math.cos(theta) * r, d.center.y + 0.2 + y, d.center.z + Math.sin(theta) * r, 1, 0, 0,
+			d.world.sendParticles(ModParticles.STILL_SAND.get(), d.center.x + Math.cos(theta) * r, d.center.y + 0.2 + y, d.center.z + Math.sin(theta) * r, 1, 0, 0,
 					0, 0);
 		}
 	}

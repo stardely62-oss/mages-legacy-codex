@@ -69,7 +69,7 @@ public final class Shop {
 			new Ware("bottles", Kind.GOODS, 8, 1, 0, 0, () -> new ItemStack(Items.EXPERIENCE_BOTTLE, 8)),
 			new Ware("healing", Kind.GOODS, 8, 1, 0, 0, () -> PotionUtils.setPotion(new ItemStack(Items.POTION), Potions.STRONG_HEALING)),
 			new Ware("golden_apple", Kind.GOODS, 15, 1, 0, 0, () -> new ItemStack(Items.GOLDEN_APPLE)),
-			new Ware("oblivion", Kind.GOODS, 40, 1, 0, 0, () -> new ItemStack(MagesLegacy.OBLIVION_SCROLL)),
+			new Ware("oblivion", Kind.GOODS, 40, 1, 0, 0, () -> new ItemStack(MagesLegacy.OBLIVION_SCROLL.get())),
 			new Ware("blaze_rods", Kind.GOODS, 10, 2, 0, 0, () -> new ItemStack(Items.BLAZE_ROD, 4)),
 			new Ware("fire_resistance", Kind.GOODS, 10, 2, 0, 0, () -> PotionUtils.setPotion(new ItemStack(Items.POTION), Potions.LONG_FIRE_RESISTANCE)),
 			new Ware("ghast_tears", Kind.GOODS, 12, 2, 0, 0, () -> new ItemStack(Items.GHAST_TEAR, 2)),

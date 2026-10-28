@@ -396,7 +396,7 @@ public final class Bloodkin {
 
 	/** Drops of blood off a creature. */
 	private static void splash(ServerLevel world, Entity e, int count) {
-		world.sendParticles(ModParticles.BLOOD, e.getX(), e.getY() + e.getBbHeight() * 0.6, e.getZ(), count, e.getBbWidth() * 0.3, e.getBbHeight() * 0.2,
+		world.sendParticles(ModParticles.BLOOD.get(), e.getX(), e.getY() + e.getBbHeight() * 0.6, e.getZ(), count, e.getBbWidth() * 0.3, e.getBbHeight() * 0.2,
 				e.getBbWidth() * 0.3, 0.05);
 	}
 
@@ -500,7 +500,7 @@ public final class Bloodkin {
 		Fx.ghosts(world, path, player.getYRot(), 4, 16, BLOOD_INK);
 		Fx.fov(player, 0.22f, 12);
 		Fx.shake(player, 0.8f, 5);
-		world.sendParticles(ModParticles.BLOOD_MIST, player.getX(), player.getY() + 0.9, player.getZ(), 8, 0.3, 0.5, 0.3, 0.02);
+		world.sendParticles(ModParticles.BLOOD_MIST.get(), player.getX(), player.getY() + 0.9, player.getZ(), 8, 0.3, 0.5, 0.3, 0.02);
 		world.playSound(null, player.blockPosition(), SoundEvents.PHANTOM_FLAP, SoundSource.PLAYERS, 1.0f, 0.6f);
 		world.playSound(null, player.blockPosition(), SoundEvents.TRIDENT_RIPTIDE_1, SoundSource.PLAYERS, 0.8f, 1.4f);
 		return AbilityResult.OK;
@@ -568,7 +568,7 @@ public final class Bloodkin {
 					// Blood thrown on along the cut
 					Vec3 spray = along.lengthSqr() > 1.0E-6 ? along.normalize() : Vec3.ZERO;
 					for (int k = 0; k < 10; k++) {
-						world.sendParticles(ModParticles.BLOOD, e.getX(), e.getY() + e.getBbHeight() * 0.6, e.getZ(), 0,
+						world.sendParticles(ModParticles.BLOOD.get(), e.getX(), e.getY() + e.getBbHeight() * 0.6, e.getZ(), 0,
 								spray.x * 0.35 + (world.getRandom().nextDouble() - 0.5) * 0.2, 0.15 + world.getRandom().nextDouble() * 0.15,
 								spray.z * 0.35 + (world.getRandom().nextDouble() - 0.5) * 0.2, 1);
 					}
@@ -580,7 +580,7 @@ public final class Bloodkin {
 			}
 			for (int i = 0; i <= 4; i++) {
 				Vec3 p = a.lerp(b, i / 4.0);
-				world.sendParticles(ModParticles.BLOOD, p.x, p.y + 1, p.z, 2, 0.2, 0.4, 0.2, 0.02);
+				world.sendParticles(ModParticles.BLOOD.get(), p.x, p.y + 1, p.z, 2, 0.2, 0.4, 0.2, 0.02);
 			}
 			player.setDeltaMovement(Vec3.ZERO);
 			player.fallDistance = 0;
@@ -591,8 +591,8 @@ public final class Bloodkin {
 				if (data.has(Talents.FANG_DOUBLE) && !d.free()) {
 					DOUBLE.put(player.getUUID(), now + DOUBLE_WINDOW);
 				}
-				world.sendParticles(ModParticles.BLOOD, b.x, b.y + 0.5, b.z, 16, 0.4, 0.3, 0.4, 0.1);
-				world.sendParticles(ModParticles.BLOOD_MIST, b.x, b.y + 0.8, b.z, 10, 0.4, 0.4, 0.4, 0.04);
+				world.sendParticles(ModParticles.BLOOD.get(), b.x, b.y + 0.5, b.z, 16, 0.4, 0.3, 0.4, 0.1);
+				world.sendParticles(ModParticles.BLOOD_MIST.get(), b.x, b.y + 0.8, b.z, 10, 0.4, 0.4, 0.4, 0.04);
 				Fx.burst(world, b.add(0, 1, 0), 1.1f, 6, BLOOD_INK);
 				Fx.ring(world, b, 0.3f, 2.2f, 10, BLOOD_INK);
 			}
@@ -653,7 +653,7 @@ public final class Bloodkin {
 			for (int i = 0; i < 10; i++) {
 				Vec3 at = from.add(way.scale(i / 10.0 * 0.3));
 				Vec3 push = way.scale(0.07 + world.getRandom().nextDouble() * 0.015);
-				world.sendParticles(ModParticles.BLOOD_MOTE, at.x, at.y, at.z, 0, push.x, push.y, push.z, 1);
+				world.sendParticles(ModParticles.BLOOD_MOTE.get(), at.x, at.y, at.z, 0, push.x, push.y, push.z, 1);
 			}
 			Progression.addXp(player, data, "bloodkin_harvest", 2, 30);
 			drawn++;
@@ -822,8 +822,8 @@ public final class Bloodkin {
 		Fx.ring(world, player.position(), 0.4f, 3.5f, 12, BLOOD_INK);
 		Fx.fov(player, 0.16f, ticks);
 		Fx.shake(player, 1.6f, 8);
-		world.sendParticles(ModParticles.BLOOD_MIST, player.getX(), player.getY() + 1, player.getZ(), 24, 0.5, 0.7, 0.5, 0.06);
-		world.sendParticles(ModParticles.BAT, player.getX(), player.getY() + 1.1, player.getZ(), 16, 0.3, 0.4, 0.3, 0.35);
+		world.sendParticles(ModParticles.BLOOD_MIST.get(), player.getX(), player.getY() + 1, player.getZ(), 24, 0.5, 0.7, 0.5, 0.06);
+		world.sendParticles(ModParticles.BAT.get(), player.getX(), player.getY() + 1.1, player.getZ(), 16, 0.3, 0.4, 0.3, 0.35);
 		world.playSound(null, player.blockPosition(), SoundEvents.BAT_TAKEOFF, SoundSource.PLAYERS, 1.2f, 0.8f);
 	}
 
@@ -838,7 +838,7 @@ public final class Bloodkin {
 					player.fallDistance = 0;
 					// The flock gathers back into a body
 					ServerLevel world = player.serverLevel();
-					world.sendParticles(ModParticles.BLOOD_MIST, player.getX(), player.getY() + 1, player.getZ(), 16, 0.4, 0.6, 0.4, 0.02);
+					world.sendParticles(ModParticles.BLOOD_MIST.get(), player.getX(), player.getY() + 1, player.getZ(), 16, 0.4, 0.6, 0.4, 0.02);
 					Fx.helix(world, player, 1.6f, 2.2f, 3, true, 10, WINE_INK);
 					Fx.burst(world, player.position().add(0, 1, 0), 1.3f, 6, BLOOD_INK);
 					Fx.shake(player, 1.0f, 6);
