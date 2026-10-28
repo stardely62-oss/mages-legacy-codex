@@ -307,7 +307,7 @@ public final class Mercenary {
 		float drain = data.has(Talents.DEAL_SHARP) ? 6 : 4;
 		ServerLevel world = player.serverLevel();
 		target.hurt(world.damageSources().indirectMagic(player, player), drain);
-		player.setAbsorptionAmount(Math.min(8, player.getAbsorptionAmount() + drain));
+		euf.mageslegacy.platform.Absorption.add(player, drain);
 		if (data.has(Talents.DEAL_CURSE)) {
 			target.addEffect(new MobEffectInstance(MobEffects.WEAKNESS, 120, 0));
 			target.addEffect(new MobEffectInstance(MobEffects.MOVEMENT_SLOWDOWN, 120, 0));

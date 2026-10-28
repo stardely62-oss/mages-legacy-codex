@@ -147,6 +147,7 @@ public class MagesLegacy {
 		}
 		RaceState state = RaceState.get(server);
 		for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+			euf.mageslegacy.platform.Absorption.tick(player);
 			RaceData data = state.data(player.getUUID());
 			if (ticks % 20 == 0 && player.isAlive() && !player.isSpectator()) {
 				if (data.race == Race.MYCELID) {

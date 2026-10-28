@@ -408,7 +408,7 @@ public final class Tempter {
 			target.addEffect(new MobEffectInstance(MobEffects.POISON, 80, 1));
 		}
 		if (data.has(Talents.KISS_SHIELD)) {
-			player.setAbsorptionAmount(Math.min(8, player.getAbsorptionAmount() + 4));
+			euf.mageslegacy.platform.Absorption.add(player, 4);
 		}
 		if (data.has(Talents.KISS_SHARE)) {
 			for (Player friend : world.getEntitiesOfClass(Player.class, player.getBoundingBox().inflate(6), p -> p != player && p.isAlive())) {

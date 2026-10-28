@@ -540,7 +540,7 @@ public final class Masked {
 			player.heal(4);
 		}
 		if (data.has(Talents.RIP_ARMOR)) {
-			player.setAbsorptionAmount(Math.min(8, player.getAbsorptionAmount() + 4));
+			euf.mageslegacy.platform.Absorption.add(player, 4);
 		}
 		if (data.has(Talents.RIP_SHOCK)) {
 			for (Mob m : world.getEntitiesOfClass(Mob.class, player.getBoundingBox().inflate(8), m -> m.isAlive() && face.matches(m.getType()))) {
