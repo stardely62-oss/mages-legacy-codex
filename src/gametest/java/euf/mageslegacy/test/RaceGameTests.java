@@ -367,29 +367,29 @@ public class RaceGameTests {
 		check((int) data.resource == 25, "a jump costs 15 spores");
 		check(Mycelid.sporeJump(player, data) == AbilityResult.COOLDOWN, "no second jump right away");
 		ctx.runAfterDelay(Mycelid.JUMP_DELAY + 3, () -> {
-			double moved = player.position().subtract(from).horizontalLength();
+			double moved = player.position().subtract(from).horizontalDistance();
 			check(moved > 2 && moved <= 16.6, "the player should sprout up to 16 blocks ahead, moved " + moved);
 			check(player.getZ() > from.z, "forward is south, now at " + player.position());
 			check(!world.noCollision(player, player.getBoundingBox().move(0, -0.3, 0)), "landed on the floor");
 			// Looking almost level: the spore flies the full reach and the Mycelid settles on the floor there
 			net.minecraft.world.phys.Vec3 second = player.position();
-			player.refreshPositionAndAngles(second.x, second.y, second.z, 0, 3);
+			player.moveTo(second.x, second.y, second.z, 0, 3);
 			data.readyAt.clear();
 			data.chainLeft = 0;
 			check(Mycelid.sporeJump(player, data) == AbilityResult.OK, "the level jump should start");
 			ctx.runAfterDelay(Mycelid.JUMP_DELAY + 3, () -> {
-				double far = player.position().subtract(second).horizontalLength();
+				double far = player.position().subtract(second).horizontalDistance();
 				check(far > 12 && far <= 16.6, "a level jump should cover most of the 16 blocks, moved " + far);
 				// Looking a little up into the open sky: the spores drift down and settle on the floor far ahead, never in
 				// the air and never right at the Mycelid's feet
 				data.addResource(100);
 				net.minecraft.world.phys.Vec3 third = player.position();
-				player.refreshPositionAndAngles(third.x, third.y, third.z, 180, -15);
+				player.moveTo(third.x, third.y, third.z, 180, -15);
 				data.readyAt.clear();
 				data.chainLeft = 0;
 				AbilityResult up = Mycelid.sporeJump(player, data);
 				ctx.runAfterDelay(Mycelid.JUMP_DELAY + 3, () -> {
-					double upward = player.position().subtract(third).horizontalLength();
+					double upward = player.position().subtract(third).horizontalDistance();
 					check(up == AbilityResult.OK && upward > 10, "a jump aimed a little up carries far, moved " + upward + " (" + up + ")");
 					check(!world.noCollision(player, player.getBoundingBox().move(0, -0.3, 0)),
 							"never left hanging in the air, now at " + player.position());

@@ -62,8 +62,11 @@ public final class Network {
     }
     public static final class Server {
         public static void registerGlobalReceiver(ResourceLocation id, ServerReceiver receiver) { SERVER.put(id, receiver); }
-        public static void send(ServerPlayer player, ResourceLocation id, FriendlyByteBuf buf) { PacketDistributor.sendToPlayer(player, payload(id, buf)); }
-        public static boolean canSend(ServerPlayer player, ResourceLocation id) { return player.connection.hasChannel(id); }
+        public static void send(ServerPlayer player, ResourceLocation id, FriendlyByteBuf buf) {
+            if (!canSend(player, id)) { buf.release(); return; }
+            PacketDistributor.sendToPlayer(player, payload(id, buf));
+        }
+        public static boolean canSend(ServerPlayer player, ResourceLocation id) { return player.connection != null && player.connection.hasChannel(id); }
     }
     public static final class Client {
         public static void registerGlobalReceiver(ResourceLocation id, ClientReceiver receiver) { CLIENT.put(id, receiver); }

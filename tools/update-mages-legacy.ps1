@@ -65,7 +65,7 @@ try {
     if (Get-ChildItem -LiteralPath $mods -Filter 'fabric-api-*.jar') { throw 'This folder contains Fabric mods. Use a clean NeoForge profile.' }
 
     # 4. Сам мод из GitHub Releases
-    $api = if ($Stable) { "https://api.github.com/repos/$Repo/releases/latest" } else { "https://api.github.com/repos/$Repo/releases/tags/dev" }
+    $api = if ($Stable) { "https://api.github.com/repos/$Repo/releases/latest" } else { "https://api.github.com/repos/$Repo/releases/tags/neoforge-dev" }
     $release = Invoke-RestMethod $api -Headers $Headers
     $asset = $release.assets | Where-Object { $_.name -like 'mages-legacy-*.jar' -and $_.name -notlike '*-sources*' } | Select-Object -First 1
     if (-not $asset) { throw "В релизе '$($release.name)' нет jar-файла мода." }
